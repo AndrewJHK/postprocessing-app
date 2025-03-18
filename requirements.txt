@@ -1,2 +1,2 @@
 matplotlib~=3.7.0
-dask~=2024.10.0
+dask[dataframe]~=2024.10.0
