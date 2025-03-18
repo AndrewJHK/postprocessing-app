@@ -18,7 +18,7 @@ class DataFrameWrapper:
 class Plotter:
     def __init__(self, dataframes, plot_name, plots_folder_path, plot_type="line", axis_labels=None,
                  channel_labels=None,
-                 horizontal_lines=None, vertical_lines=None, line_colors=None):
+                 horizontal_lines=None, vertical_lines=None, line_colors=None, precise_grid=False):
         self.dataframes = dataframes if isinstance(dataframes, list) else [dataframes]
         self.plot_name = plot_name
         self.plots_folder_path = plots_folder_path
@@ -28,7 +28,7 @@ class Plotter:
         self.horizontal_lines = horizontal_lines or []  # List of tuples (value, label, color)
         self.vertical_lines = vertical_lines or []  # List of tuples (value, label, color)
         self.line_colors = line_colors or {}  # Dictionary mapping channel names to colors
-
+        self.precise_grid = precise_grid
         os.makedirs(self.plots_folder_path, exist_ok=True)
 
     def plot(self):
@@ -83,18 +83,19 @@ class Plotter:
         for x_value, label, color in self.vertical_lines:
             handle = ax1.axvline(x=x_value, color=color, linestyle='--', label=label)
             legend_handles.append(handle)
+
         # Grid setup
-        ax1.xaxis.set_major_locator(ticker.AutoLocator())
-        ax1.xaxis.set_minor_locator(ticker.AutoMinorLocator())
-        ax1.yaxis.set_major_locator(ticker.AutoLocator())
-        ax1.yaxis.set_minor_locator(ticker.AutoMinorLocator())
+        if self.precise_grid:
+            ax1.xaxis.set_major_locator(ticker.AutoLocator())
+            ax1.xaxis.set_minor_locator(ticker.AutoMinorLocator())
+            ax1.yaxis.set_major_locator(ticker.AutoLocator())
+            ax1.yaxis.set_minor_locator(ticker.AutoMinorLocator())
 
         ax1.grid(True, which='both', linestyle='--', linewidth=0.5)
         if ax2:
-            ax2.xaxis.set_major_locator(ticker.AutoLocator())
-            ax2.xaxis.set_minor_locator(ticker.AutoMinorLocator())
-            ax2.yaxis.set_major_locator(ticker.AutoLocator())
-            ax2.yaxis.set_minor_locator(ticker.AutoMinorLocator())
+            if self.precise_grid:
+                ax2.yaxis.set_major_locator(ticker.AutoLocator())
+                ax2.yaxis.set_minor_locator(ticker.AutoMinorLocator())
             ax2.grid(True, which='both', linestyle='-', linewidth=1)
 
         # Legend setup
@@ -107,7 +108,7 @@ class Plotter:
             mgr.toolbar.pack(side='top', fill='x')
 
         plot.title(f"{self.plot_name}")
-        self.save_plot("wykres_z_cipska")
+        self.save_plot(self.plot_name)
         plot.show()
 
     def save_plot(self, filename):
