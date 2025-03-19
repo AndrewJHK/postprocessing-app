@@ -4,17 +4,6 @@ import os
 import matplotlib.ticker as ticker
 
 
-class DataFrameWrapper:
-    def __init__(self, csv_path, plot_columns, x_column="index"):
-        self.csv_path = csv_path
-        self.plot_columns = plot_columns
-        self.x_column = x_column
-        self.df = dd.read_csv(csv_path)
-
-    def get_data(self):
-        return self.df
-
-
 class Plotter:
     def __init__(self, dataframes, plot_name, plots_folder_path, plot_type="line", axis_labels=None,
                  channel_labels=None,
@@ -29,43 +18,55 @@ class Plotter:
         self.vertical_lines = vertical_lines or []  # List of tuples (value, label, color)
         self.line_colors = line_colors or {}  # Dictionary mapping channel names to colors
         self.precise_grid = precise_grid
+        self.plot_configs = {}
         os.makedirs(self.plots_folder_path, exist_ok=True)
+
+    def set_plot_config(self, dataframe, plot_columns, x_column="index", line_alphas=None):
+        self.plot_configs[dataframe] = {"plot_columns": plot_columns, "x_column": x_column,
+                                        "line_alphas": line_alphas or {}}
 
     def plot(self):
         fig, ax1 = plot.subplots(figsize=(10, 7))
         ax2 = None
 
-        twin_axes = any("y2" in df.plot_columns.values() for df in self.dataframes)
+        twin_axes = any("y2" in config["plot_columns"].values() for config in self.plot_configs.values())
+
         if twin_axes:
             ax2 = ax1.twinx()
 
         legend_handles = []
 
         for df_wrapper in self.dataframes:
-            df = df_wrapper.get_data()
-            if df_wrapper.x_column in df.columns:
-                x_values = df[df_wrapper.x_column].compute()
+            df = df_wrapper.get_dataframe()
+            config = self.plot_configs.get(df_wrapper, {})
+            plot_columns = config.get("plot_columns", {})
+            x_column = config.get("x_column", "index")
+            line_alphas = config.get("line_alphas", {})
+
+            if x_column in df.columns:
+                x_values = df[x_column].compute()
                 x_values = (x_values - x_values.min()) / 1000
             else:
                 x_values = df.index.compute()
 
-            for channel, axis in df_wrapper.plot_columns.items():
+            for channel, axis in plot_columns.items():
                 if channel in df.columns:
                     df_column = df[channel].compute()
                     label = self.channel_labels.get(f"{df_wrapper.csv_path}_{channel}",
-                                                    f"{channel} ({df_wrapper.csv_path})")  # Pobranie etykiety legendy
-                    color = self.line_colors.get(channel, None)  # Pobranie koloru, jeśli podano
+                                                    f"{channel} ({df_wrapper.csv_path})")
+                    color = self.line_colors.get(channel, None)
+                    alpha = line_alphas.get(channel, 1.0)
 
                     if axis == "y1":
                         if self.plot_type == "line":
-                            handle, = ax1.plot(x_values, df_column, label=label, color=color)
+                            handle, = ax1.plot(x_values, df_column, label=label, color=color, alpha=alpha)
                         elif self.plot_type == "scatter":
-                            handle, = ax1.plot(x_values, df_column, label=label, color=color)
+                            handle, = ax1.plot(x_values, df_column, label=label, color=color, alpha=alpha)
                     elif ax2 is not None and axis == "y2":
                         if self.plot_type == "line":
-                            handle, = ax2.plot(x_values, df_column, label=label, color=color)
+                            handle, = ax2.plot(x_values, df_column, label=label, color=color, alpha=alpha)
                         elif self.plot_type == "scatter":
-                            handle, = ax2.plot(x_values, df_column, label=label, color=color)
+                            handle, = ax2.plot(x_values, df_column, label=label, color=color, alpha=alpha)
                     legend_handles.append(handle)
 
         # Axis labels
