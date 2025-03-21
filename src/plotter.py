@@ -5,68 +5,68 @@ import matplotlib.ticker as ticker
 
 
 class Plotter:
-    def __init__(self, dataframes, plot_name, plots_folder_path, plot_type="line", axis_labels=None,
-                 channel_labels=None,
-                 horizontal_lines=None, vertical_lines=None, line_colors=None, precise_grid=False):
-        self.dataframes = dataframes if isinstance(dataframes, list) else [dataframes]
-        self.plot_name = plot_name
+    def __init__(self, config_dict, dataframe_map, plots_folder_path):
+        self.config = config_dict
+        self.dataframes = dataframe_map  # mapping: {"db1": DataFrameWrapper, ...}
+        self.plot_name = config_dict["plot_settings"].get("title", "Plot")
+        self.plot_type = config_dict["plot_settings"].get("type", "line")
+        self.precise_grid = config_dict["plot_settings"].get("precise_grid", False)
         self.plots_folder_path = plots_folder_path
-        self.plot_type = plot_type
-        self.axis_labels = axis_labels or {"x": "X-Axis", "y1": "Y1-Axis", "y2": "Y2-Axis"}
-        self.channel_labels = channel_labels or {}  # Dictionary mapping channel names to the labels
-        self.horizontal_lines = horizontal_lines or []  # List of tuples (value, label, color)
-        self.vertical_lines = vertical_lines or []  # List of tuples (value, label, color)
-        self.line_colors = line_colors or {}  # Dictionary mapping channel names to colors
-        self.precise_grid = precise_grid
-        self.plot_configs = {}
-        os.makedirs(self.plots_folder_path, exist_ok=True)
 
-    def set_plot_config(self, dataframe, plot_columns, x_column="index", line_alphas=None):
-        self.plot_configs[dataframe] = {"plot_columns": plot_columns, "x_column": x_column,
-                                        "line_alphas": line_alphas or {}}
+        self.axis_labels = {
+            "x": config_dict["plot_settings"].get("x_axis_label", "X-Axis"),
+            "y1": config_dict["plot_settings"].get("y_axis_labels", {}).get("y1", "Y1-Axis"),
+            "y2": config_dict["plot_settings"].get("y_axis_labels", {}).get("y2", "Y2-Axis")
+        }
+
+        self.horizontal_lines = config_dict["plot_settings"].get("horizontal_lines", {})
+        self.vertical_lines = config_dict["plot_settings"].get("vertical_lines", {})
+
+        os.makedirs(self.plots_folder_path, exist_ok=True)
 
     def plot(self):
         fig, ax1 = plot.subplots(figsize=(10, 7))
         ax2 = None
 
-        twin_axes = any("y2" in config["plot_columns"].values() for config in self.plot_configs.values())
-
-        if twin_axes:
+        # Check if any channel is assigned to y2
+        has_y2 = any(
+            ch.get("y_axis") == "y2"
+            for db in self.config["databases"].values()
+            for ch in db["channels"].values()
+        )
+        if has_y2:
             ax2 = ax1.twinx()
 
         legend_handles = []
 
-        for df_wrapper in self.dataframes:
+        for db_key, db_config in self.config["databases"].items():
+            df_wrapper = self.dataframes[db_key]
             df = df_wrapper.get_dataframe()
-            config = self.plot_configs.get(df_wrapper, {})
-            plot_columns = config.get("plot_columns", {})
-            x_column = config.get("x_column", "index")
-            line_alphas = config.get("line_alphas", {})
 
-            if x_column in df.columns:
-                x_values = df[x_column].compute()
-                x_values = (x_values - x_values.min()) / 1000
-            else:
-                x_values = df.index.compute()
+            for channel, ch_conf in db_config["channels"].items():
+                x_column = ch_conf.get("x_column", "index")
+                y_axis = ch_conf.get("y_axis", "y1")
+                label = ch_conf.get("label", channel)
+                color = ch_conf.get("color", None)
+                alpha = ch_conf.get("alpha", 1.0)
 
-            for channel, axis in plot_columns.items():
+                if x_column in df.columns:
+                    x_values = df[x_column].compute()
+                    x_values = (x_values - x_values.min()) / 1000
+                else:
+                    x_values = df.index.compute()
+
                 if channel in df.columns:
-                    df_column = df[channel].compute()
-                    label = self.channel_labels.get(f"{df_wrapper.csv_path}_{channel}",
-                                                    f"{channel} ({df_wrapper.csv_path})")
-                    color = self.line_colors.get(channel, None)
-                    alpha = line_alphas.get(channel, 1.0)
+                    y_values = df[channel].compute()
 
-                    if axis == "y1":
-                        if self.plot_type == "line":
-                            handle, = ax1.plot(x_values, df_column, label=label, color=color, alpha=alpha)
-                        elif self.plot_type == "scatter":
-                            handle, = ax1.plot(x_values, df_column, label=label, color=color, alpha=alpha)
-                    elif ax2 is not None and axis == "y2":
-                        if self.plot_type == "line":
-                            handle, = ax2.plot(x_values, df_column, label=label, color=color, alpha=alpha)
-                        elif self.plot_type == "scatter":
-                            handle, = ax2.plot(x_values, df_column, label=label, color=color, alpha=alpha)
+                    if y_axis == "y1":
+                        handle, = ax1.plot(x_values, y_values, label=label, color=color,
+                                           alpha=alpha) if self.plot_type == "line" \
+                            else ax1.scatter(x_values, y_values, label=label, color=color, alpha=alpha)
+                    elif ax2:
+                        handle, = ax2.plot(x_values, y_values, label=label, color=color,
+                                           alpha=alpha) if self.plot_type == "line" \
+                            else ax2.scatter(x_values, y_values, label=label, color=color, alpha=alpha)
                     legend_handles.append(handle)
 
         # Axis labels
@@ -75,14 +75,20 @@ class Plotter:
         if ax2:
             ax2.set_ylabel(self.axis_labels.get("y2", "Y2-Axis"))
 
-        # Horizontal lines
-        for y_value, label, color in self.horizontal_lines:
-            handle = ax1.axhline(y=y_value, color=color, linestyle='--', label=label)
+        # Draw horizontal lines
+        for line in self.horizontal_lines.values():
+            y = line.get("place")
+            label = line.get("label")
+            color = line.get("color", "black")
+            handle = ax1.axhline(y=y, color=color, linestyle='--', label=label)
             legend_handles.append(handle)
 
-        # Vertical lines
-        for x_value, label, color in self.vertical_lines:
-            handle = ax1.axvline(x=x_value, color=color, linestyle='--', label=label)
+        # Draw vertical lines
+        for line in self.vertical_lines.values():
+            x = line.get("place")
+            label = line.get("label")
+            color = line.get("color", "black")
+            handle = ax1.axvline(x=x, color=color, linestyle='--', label=label)
             legend_handles.append(handle)
 
         # Grid setup
@@ -97,21 +103,22 @@ class Plotter:
             if self.precise_grid:
                 ax2.yaxis.set_major_locator(ticker.AutoLocator())
                 ax2.yaxis.set_minor_locator(ticker.AutoMinorLocator())
-            ax2.grid(True, which='both', linestyle='-', linewidth=1)
+            ax2.grid(True, which='both', linestyle='--', linewidth=0.5)
 
-        # Legend setup
+        # Legend and layout
         plot.subplots_adjust(bottom=0.2)
         plot.legend(handles=legend_handles, bbox_to_anchor=(0.5, 0.02), loc="lower center",
                     bbox_transform=fig.transFigure, fancybox=True, shadow=True, ncol=3)
-        # Put the fig manager on top
+
+        # Toolbar on top
         mgr = plot.get_current_fig_manager()
         if hasattr(mgr, 'toolbar'):
             mgr.toolbar.pack(side='top', fill='x')
 
-        plot.title(f"{self.plot_name}")
+        plot.title(self.plot_name)
         self.save_plot(self.plot_name)
         plot.show()
 
     def save_plot(self, filename):
-        path = f"{self.plots_folder_path}/{filename}.png"
+        path = os.path.join(self.plots_folder_path, f"{filename}.png")
         plot.savefig(path)
