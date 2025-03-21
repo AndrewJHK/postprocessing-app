@@ -17,7 +17,7 @@ class DataFrameWrapper:
     def get_csv_path(self):
         return self.csv_path
 
-    def update_dataframe(self,dataframe):
+    def update_dataframe(self, dataframe):
         self.df = dataframe
 
 
@@ -57,23 +57,67 @@ class DataProcessor:
         for column in columns:
             self.df[column] = self.df[column] * factor
 
-    def scale_columns_by_equation(self, columns, equation_type, params):
-        """
-        Applies a whole equation to specific columns, with proper params
-        """
-        match EQUATIONS[equation_type]:
-            case "biliq":
-                # biliq equation filled with params
-                pass
-            case "broom_stick":
-                # broomstick equation filled with params
-                pass
-            case _:
-                pass
-
     def sort_data(self, key, ascending=True):
-
+        """"Sort the dataframe by a concrete column and in provided direction"""
         self.df = self.df.sort_values(by=key, ascending=ascending)
+
+    def drop_data(self, columns=None, row_range=None, row_condition=None):
+        """
+        Drops specified columns and/or rows based on range or condition.
+
+        :param columns: List of column names to drop.
+        :param row_range: Tuple (start, end) to drop rows within index range.
+        :param row_condition: A lambda condition to apply to rows.
+        """
+        if columns:
+            self.df = self.df.drop(columns=columns, axis=1, errors='ignore')
+
+        if row_range:
+            start, end = row_range
+            self.df = self.df[(self.df.index < start) | (self.df.index > end)]
+
+        if row_condition:
+            self.df = self.df[~self.df.map_partitions(lambda df: df.apply(row_condition, axis=1))]
+
+        self.df_wrapper.update_dataframe(self.df)
+
+    def scale_index_by_equation(self, equation_func, start_idx=None, end_idx=None):
+        """
+        Scales the DataFrame index based on a time-dependent function.
+
+        :param equation_func: a function that accepts index and returns scale factor
+        :param start_idx: optional starting index for applying the scale
+        :param end_idx: optional ending index for applying the scale
+        """
+
+        def apply_func(partition):
+            idx = partition.index
+            if start_idx is not None:
+                partition = partition.loc[(idx >= start_idx)]
+            if end_idx is not None:
+                partition = partition.loc[(idx <= end_idx)]
+            scale_factors = equation_func(idx)
+            partition.index = idx * scale_factors
+            return partition
+
+        self.df = self.df.map_partitions(apply_func)
+        self.df_wrapper.update_dataframe(self.df)
+
+    def find_index_where_max(self, column_to_max, condition_column):
+        """
+        Finds the index and value in column_to_max where condition_column has its maximum.
+        Can be used to determine the exact moment of ignition, so it then can be mapped as the time 0
+        :param column_to_max: column to return the value from
+        :param condition_column: column to check for maximum value
+        :return: (index, value)
+        """
+        max_row = self.df[self.df[condition_column] == self.df[condition_column].max()]
+        result = max_row[[column_to_max]].compute()
+        index = result.index[0]
+        if column_to_max:
+            value = result[column_to_max].iloc[0]
+            return index, value
+        return index
 
     def get_processed_data(self):
         """Returns the processed DataFrame."""
@@ -82,7 +126,6 @@ class DataProcessor:
     def save_data(self, path):
         """Save the processed DataFrame."""
         dd.to_csv(self.df, path)
-
 
 
 class DataFilter:
@@ -98,6 +141,13 @@ class DataFilter:
         }
 
     def add_filter(self, columns, filter_name, **kwargs):
+        """
+        Function used to add a predefined filter to the filter queue
+        :param columns: Columns to filter
+        :param filter_name: Type of filter to use
+        :param kwargs: Parameters to pass to the specific filter
+        :return:
+        """
         if isinstance(columns, str):
             columns = [columns]
 
@@ -107,6 +157,11 @@ class DataFilter:
             self.filters[column].append((filter_name, kwargs))
 
     def queue_filters(self, df):
+        """
+        Run the queue of filters
+        :param df: Dataframe to run the filters on
+        :return:
+        """
         for column, filter_queue in self.filters.items():
             if column in df.columns:
                 for filter_name, params in filter_queue:
@@ -115,6 +170,13 @@ class DataFilter:
         return df
 
     def _apply_filter(self, series, filter_name, **kwargs):
+        """
+        Apply the predetermined filter with parameters on specified data
+        :param series: Data to filter
+        :param filter_name: Type of filter
+        :param kwargs: Parameters to pass to the specific filter
+        :return:
+        """
         if filter_name in self.filter_methods:
             return self.filter_methods[filter_name](series, **kwargs)
         else:
@@ -137,7 +199,7 @@ class DataFilter:
 
     @staticmethod
     def rolling_median(series, window_size=3):
-        """Applies a rolling mean filter."""
+        """Applies a rolling median filter."""
         return series.rolling(window=window_size, min_periods=1).median()
 
     @staticmethod
@@ -147,25 +209,27 @@ class DataFilter:
 
     @staticmethod
     def wavelet_transform(series, wavelet_name, level, threshold_mode):
-        # Perform Discrete Wavelet Transform
+        """
+        Applies selected wavelet transform
+        :param series: Data to filter
+        :param wavelet_name: Type of wavelet transform
+        :param level: Level of smoothing out the data the higher, the smoother
+        :param threshold_mode: Mode of thresholding 'soft' smooths out, 'hard' keeps the details
+        :return:
+        """
         c = pywt.wavedec(series, wavelet_name, level=level)
-        # Extract detail coefficients at the last level
-        if level < len(c):  # Ensure level exists
+        if level < len(c):
             d = c[level]
         else:
             d = c[-1]
 
-        # Compute noise threshold using median absolute deviation
         sigma = np.median(np.abs(d)) / 0.6745
         threshold = sigma * np.sqrt(2 * np.log(len(series)))
 
-        # Apply thresholding
         c_thresh = [pywt.threshold(ci, threshold, mode=threshold_mode) for ci in c]
 
-        # Reconstruct the denoised signal
         denoised_series = pywt.waverec(c_thresh, wavelet_name)
 
-        # Ensure the length of the output matches the input (due to padding)
         denoised_series = denoised_series[:len(series)]
 
         return denoised_series

@@ -80,7 +80,11 @@ class Plotter:
             y = line.get("place")
             label = line.get("label")
             color = line.get("color", "black")
-            handle = ax1.axhline(y=y, color=color, linestyle='--', label=label)
+            axis = line.get("axis", "y1")
+            if axis == "y1":
+                handle = ax1.axhline(y=y, color=color, linestyle='--', label=label)
+            else:
+                handle = ax2.axhline(y=y, color=color, linestyle='--', label=label)
             legend_handles.append(handle)
 
         # Draw vertical lines
@@ -88,7 +92,11 @@ class Plotter:
             x = line.get("place")
             label = line.get("label")
             color = line.get("color", "black")
-            handle = ax1.axvline(x=x, color=color, linestyle='--', label=label)
+            axis = line.get("axis", "y1")
+            if axis == "y1":
+                handle = ax1.axvline(x=x, color=color, linestyle='--', label=label)
+            else:
+                handle = ax2.axvline(x=x, color=color, linestyle='--', label=label)
             legend_handles.append(handle)
 
         # Grid setup
