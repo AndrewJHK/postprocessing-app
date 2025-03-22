@@ -1,9 +1,8 @@
 from PyQt6.QtWidgets import (
-        QApplication, QWidget, QPushButton, QLabel,
-        QVBoxLayout, QFileDialog, QHBoxLayout, QScrollArea
-    )
-from PyQt6.QtCore import Qt
-import sys
+    QWidget, QPushButton, QLabel,
+    QVBoxLayout, QFileDialog, QHBoxLayout, QScrollArea
+)
+
 import os
 from src.data_processing import DataProcessor, DataFrameWrapper
 from src.json_parser import JSONParser
@@ -28,10 +27,10 @@ class FileWidget(QWidget):
         self.delete_callback(self)
 
 
-class FileLoaderApp(QWidget):
+class PostProcessingApp(QWidget):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("File Loader GUI")
+        self.setWindowTitle("Postprocessing GUI")
         self.resize(400, 300)
 
         self.file_widgets = []
@@ -73,10 +72,3 @@ class FileLoaderApp(QWidget):
         self.file_widgets.remove(widget)
         widget.setParent(None)
         widget.deleteLater()
-
-
-if __name__ == "__main__":
-    app = QApplication(sys.argv)
-    window = FileLoaderApp()
-    window.show()
-    sys.exit(app.exec())
