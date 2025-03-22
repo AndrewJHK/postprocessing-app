@@ -28,6 +28,9 @@ class DataProcessor:
         self.df = df_wrapper.get_dataframe()
         self.filters = DataFilter()  # Filters are handled separately
 
+    def get_filters(self):
+        return self.filters.get_filter_queue()
+
     def add_filter(self, columns, filter_name, **kwargs):
         """Adds a predefined filter with parameters to be applied later."""
         self.filters.add_filter(columns, filter_name, **kwargs)
@@ -139,6 +142,9 @@ class DataFilter:
             "threshold": self.threshold_filter,
             "wavelet_transform": self.wavelet_transform
         }
+
+    def get_filter_queue(self):
+        return self.filters
 
     def add_filter(self, columns, filter_name, **kwargs):
         """
