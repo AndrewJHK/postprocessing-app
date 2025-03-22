@@ -11,7 +11,9 @@ class Plotter:
         self.plot_name = config_dict["plot_settings"].get("title", "Plot")
         self.plot_type = config_dict["plot_settings"].get("type", "line")
         self.precise_grid = config_dict["plot_settings"].get("precise_grid", False)
+        self.convert_epoch = config_dict["plot_settings"].get("convert_epoch", None)
         self.plots_folder_path = plots_folder_path
+        self.offset = config_dict["plot_settings"].get("offset", 0)
 
         self.axis_labels = {
             "x": config_dict["plot_settings"].get("x_axis_label", "X-Axis"),
@@ -51,22 +53,32 @@ class Plotter:
                 alpha = ch_conf.get("alpha", 1.0)
 
                 if x_column in df.columns:
-                    x_values = df[x_column].compute()
-                    x_values = (x_values - x_values.min()) / 1000
+                    match self.convert_epoch:
+                        case "seconds":
+                            x_values = df[x_column].compute()
+                            x_values = (x_values - x_values.min()+self.offset) / 1000
+                        case "miliseconds":
+                            x_values = df[x_column].compute()
+                            x_values = x_values - x_values.min() + self.offset
+                        case _:
+                            x_values = df[x_column].compute() + self.offset
+
                 else:
-                    x_values = df.index.compute()
+                    x_values = df.index.compute() + self.offset
 
                 if channel in df.columns:
                     y_values = df[channel].compute()
 
                     if y_axis == "y1":
-                        handle, = ax1.plot(x_values, y_values, label=label, color=color,
-                                           alpha=alpha) if self.plot_type == "line" \
-                            else ax1.scatter(x_values, y_values, label=label, color=color, alpha=alpha)
+                        if self.plot_type == "line":
+                            handle, = ax1.plot(x_values, y_values, label=label, color=color, alpha=alpha)
+                        else:
+                            handle, = ax1.scatter(x_values, y_values, label=label, color=color, alpha=alpha)
                     elif ax2:
-                        handle, = ax2.plot(x_values, y_values, label=label, color=color,
-                                           alpha=alpha) if self.plot_type == "line" \
-                            else ax2.scatter(x_values, y_values, label=label, color=color, alpha=alpha)
+                        if self.plot_type == "line":
+                            handle, = ax2.plot(x_values, y_values, label=label, color=color, alpha=alpha)
+                        else:
+                            handle, = ax2.scatter(x_values, y_values, label=label, color=color, alpha=alpha)
                     legend_handles.append(handle)
 
         # Axis labels

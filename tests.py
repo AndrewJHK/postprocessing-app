@@ -17,7 +17,9 @@ def plotter_test():
             "title": "Rocket Telemetry",
             "type": "line",
             "precise_grid": False,
-            "x_axis_label": "Time (s)",
+            "convert_epoch": "seconds",
+            "offset": -30000,
+            "x_axis_label": "Time (ms)",
             "y_axis_labels": {
                 "y1": "Pressure",
                 "y2": "Thrust"
@@ -58,7 +60,7 @@ def plotter_test():
             },
             "db2": {
                 "channels": {
-                    "data.TM2.scaled": {
+                    "data.TM1.scaled": {
                         "label": "Thrust",
                         "color": "blue",
                         "alpha": 1,
@@ -72,7 +74,7 @@ def plotter_test():
     plotter = Plotter(config_dict=config, dataframe_map=dataframes, plots_folder_path="plots")
     plotter.plot()
 
-
+'''
 def wavelet_test():
     df = df3.get_dataframe()
     print(df.columns)
@@ -183,7 +185,7 @@ def filtering_test():
 
     plotter = Plotter(config_dict=config, dataframe_map=dataframes, plots_folder_path="plots")
     plotter.plot()
-
+'''
 
 if __name__ == '__main__':
     df1 = DataFrameWrapper(
@@ -192,9 +194,11 @@ if __name__ == '__main__':
     df2 = DataFrameWrapper(
         csv_path="tests/lpb_16_03_2025_interpolated_lpb.csv",
     )
+    '''
     df3 = DataFrameWrapper(
         csv_path="tests/adv_07_03_2025_fixed.csv"
     )
-    # plotter_test()
+    '''
+    plotter_test()
     # wavelet_test()
     # filtering_test()
