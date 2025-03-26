@@ -1,7 +1,5 @@
 import dask.dataframe as dd
-from collections import deque
-import pywt
-import numpy as np
+from filters import DataFilter
 
 EQUATIONS = {"biliq": "placeholder", "broom_stick": "placeholder"}
 
@@ -26,18 +24,18 @@ class DataProcessor:
         """Initializes processor with a DataFrameWrapper instance."""
         self.df_wrapper = df_wrapper
         self.df = df_wrapper.get_dataframe()
-        self.filters = DataFilter()  # Filters are handled separately
+        self.filter_manager = DataFilter()  # Handles filter strategies
 
     def get_filters(self):
-        return self.filters.get_filter_queue()
+        return self.filter_manager.get_filter_queue()
 
     def add_filter(self, columns, filter_name, **kwargs):
         """Adds a predefined filter with parameters to be applied later."""
-        self.filters.add_filter(columns, filter_name, **kwargs)
+        self.filter_manager.add_filter(columns, filter_name, **kwargs)
 
     def queue_filters(self):
         """Applies all filters to the DataFrame."""
-        self.df = self.filters.queue_filters(self.df)
+        self.df = self.filter_manager.queue_filters(self.df)
         self.df_wrapper.update_dataframe(self.df)
 
     def normalize_columns(self, columns):
@@ -61,7 +59,7 @@ class DataProcessor:
             self.df[column] = self.df[column] * factor
 
     def sort_data(self, key, ascending=True):
-        """"Sort the dataframe by a concrete column and in provided direction"""
+        """Sorts the dataframe by a specific column."""
         self.df = self.df.sort_values(by=key, ascending=ascending)
 
     def drop_data(self, columns=None, row_range=None, row_condition=None):
@@ -122,120 +120,23 @@ class DataProcessor:
             return index, value
         return index
 
+    def flip_column_sign(self, columns):
+        """
+        Flips the sign of all values in the specified column(s).
+        Positive values become negative and vice versa.
+        """
+        if isinstance(columns, str):
+            columns = [columns]
+
+        for column in columns:
+            self.df[column] = -self.df[column]
+
+        self.df_wrapper.update_dataframe(self.df)
+
     def get_processed_data(self):
         """Returns the processed DataFrame."""
         return self.df
 
     def save_data(self, path):
         """Save the processed DataFrame."""
-        dd.to_csv(self.df, path)
-
-
-class DataFilter:
-    def __init__(self):
-        self.filters = {}
-        self.filter_methods = {
-            "remove_negatives": self.remove_negatives,
-            "remove_positives": self.remove_positives,
-            "rolling_mean": self.rolling_mean,
-            "rolling_median": self.rolling_median,
-            "threshold": self.threshold_filter,
-            "wavelet_transform": self.wavelet_transform
-        }
-
-    def get_filter_queue(self):
-        return self.filters
-
-    def add_filter(self, columns, filter_name, **kwargs):
-        """
-        Function used to add a predefined filter to the filter queue
-        :param columns: Columns to filter
-        :param filter_name: Type of filter to use
-        :param kwargs: Parameters to pass to the specific filter
-        :return:
-        """
-        if isinstance(columns, str):
-            columns = [columns]
-
-        for column in columns:
-            if column not in self.filters:
-                self.filters[column] = deque()
-            self.filters[column].append((filter_name, kwargs))
-
-    def queue_filters(self, df):
-        """
-        Run the queue of filters
-        :param df: Dataframe to run the filters on
-        :return:
-        """
-        for column, filter_queue in self.filters.items():
-            if column in df.columns:
-                for filter_name, params in filter_queue:
-                    # This is so fucking cool actually
-                    df[column] = df[column].map_partitions(lambda s: self._apply_filter(s, filter_name, **params))
-        return df
-
-    def _apply_filter(self, series, filter_name, **kwargs):
-        """
-        Apply the predetermined filter with parameters on specified data
-        :param series: Data to filter
-        :param filter_name: Type of filter
-        :param kwargs: Parameters to pass to the specific filter
-        :return:
-        """
-        if filter_name in self.filter_methods:
-            return self.filter_methods[filter_name](series, **kwargs)
-        else:
-            raise ValueError(f"Filter '{filter_name}' not found.")
-
-    @staticmethod
-    def remove_negatives(series):
-        """Removes negative values from a column."""
-        return series.where(series >= 0, 0)
-
-    @staticmethod
-    def remove_positives(series):
-        """Removes negative values from a column."""
-        return series.where(series <= 0, 0)
-
-    @staticmethod
-    def rolling_mean(series, window_size=3):
-        """Applies a rolling mean filter."""
-        return series.rolling(window=window_size, min_periods=1).mean()
-
-    @staticmethod
-    def rolling_median(series, window_size=3):
-        """Applies a rolling median filter."""
-        return series.rolling(window=window_size, min_periods=1).median()
-
-    @staticmethod
-    def threshold_filter(series, threshold=100):
-        """Filters out values above a certain threshold."""
-        return series.where(series < threshold, threshold)
-
-    @staticmethod
-    def wavelet_transform(series, wavelet_name, level, threshold_mode):
-        """
-        Applies selected wavelet transform
-        :param series: Data to filter
-        :param wavelet_name: Type of wavelet transform
-        :param level: Level of smoothing out the data the higher, the smoother
-        :param threshold_mode: Mode of thresholding 'soft' smooths out, 'hard' keeps the details
-        :return:
-        """
-        c = pywt.wavedec(series, wavelet_name, level=level)
-        if level < len(c):
-            d = c[level]
-        else:
-            d = c[-1]
-
-        sigma = np.median(np.abs(d)) / 0.6745
-        threshold = sigma * np.sqrt(2 * np.log(len(series)))
-
-        c_thresh = [pywt.threshold(ci, threshold, mode=threshold_mode) for ci in c]
-
-        denoised_series = pywt.waverec(c_thresh, wavelet_name)
-
-        denoised_series = denoised_series[:len(series)]
-
-        return denoised_series
+        dd.to_csv(self.df, path, single_file=True)

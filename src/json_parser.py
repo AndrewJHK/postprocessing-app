@@ -1,6 +1,9 @@
 import csv
 from datetime import datetime
 import os
+from collections import namedtuple
+
+DeviceCSVConfig = namedtuple("DeviceCSVConfig", ["name", "origin_id", "fieldnames", "channel_mapping"])
 
 LPB_CHANNEL_MAPPING = {
     "adc1.chan0": "TM2",
@@ -57,12 +60,15 @@ class JSONParser:
         self.json_data = json_data
         self.csv_path = csv_path
         self.interpolated = interpolated
-        self.last_known_values_adv = {}
-        self.last_known_values_lpb = {}
-        self.adv_counter = 0
-        self.lpb_counter = 0
 
-    def write_row(self, record, last_known_values, writer, counter, fieldnames, channel_mapping, ):
+        self.devices = {
+            100: DeviceCSVConfig("lpb", 100, LPB_FIELDNAMES, LPB_CHANNEL_MAPPING),
+            130: DeviceCSVConfig("adv", 130, ADV_FIELDNAMES, ADV_CHANNEL_MAPPING)
+        }
+        self.last_known = {100: {}, 130: {}}
+        self.counters = {100: 0, 130: 0}
+
+    def write_row(self, record, device: DeviceCSVConfig, writer):
         origin = record["header"].get("origin", 0)
         timestamp_data = record["header"].get("timestamp", {})
         low = timestamp_data.get("low", 0)
@@ -70,22 +76,24 @@ class JSONParser:
         timestamp_epoch_milliseconds = (high * (2 ** 32)) + low
         seconds = timestamp_epoch_milliseconds // 1000
         milliseconds = timestamp_epoch_milliseconds % 1000
+
         try:
             base_timestamp = datetime.fromtimestamp(seconds)
             timestamp_human = f"{base_timestamp.strftime('%Y-%m-%d %H:%M:%S')}.{milliseconds}"
-
         except (OSError, ValueError):
             timestamp_human = "1970-01-01 00:00:00.000"
+
         row_data = {
             "header.origin": origin,
             "header.timestamp_epoch": timestamp_epoch_milliseconds,
             "header.timestamp_human": timestamp_human,
-            "header.counter": counter
+            "header.counter": self.counters[origin]
         }
+
         cpu_temp_data = record["data"].get("cpu_temperature")
         if cpu_temp_data:
-            last_known_values["data.cpu_temperature"] = cpu_temp_data.get("value", 0)
-        row_data["data.cpu_temperature"] = last_known_values["data.cpu_temperature"]
+            self.last_known[origin]["data.cpu_temperature"] = cpu_temp_data.get("value", 0)
+        row_data["data.cpu_temperature"] = self.last_known[origin].get("data.cpu_temperature")
 
         for field_key, channels in record["data"].items():
             if field_key == "cpu_temperature":
@@ -93,76 +101,61 @@ class JSONParser:
 
             for channel_key, channel_data in channels.items():
                 full_channel_name = f"{field_key}.{channel_key}"
-                channel_label = channel_mapping.get(full_channel_name)
+                channel_label = device.channel_mapping.get(full_channel_name)
 
                 if channel_label:
                     raw_column = f"data.{channel_label}.raw"
                     scaled_column = f"data.{channel_label}.scaled"
 
                     if "raw" in channel_data:
-                        last_known_values[raw_column] = channel_data["raw"]
+                        self.last_known[origin][raw_column] = channel_data["raw"]
                     if "scaled" in channel_data:
-                        last_known_values[scaled_column] = channel_data["scaled"]
+                        self.last_known[origin][scaled_column] = channel_data["scaled"]
 
-                    row_data[raw_column] = last_known_values[raw_column]
-                    row_data[scaled_column] = last_known_values[scaled_column]
+                    row_data[raw_column] = self.last_known[origin].get(raw_column)
+                    row_data[scaled_column] = self.last_known[origin].get(scaled_column)
 
-        for field in fieldnames:
+        for field in device.fieldnames:
             if field not in row_data:
-                row_data[field] = last_known_values[field] if self.interpolated else None
+                row_data[field] = self.last_known[origin].get(field) if self.interpolated else None
 
         writer.writerow(row_data)
-        counter += 1
-
-    def initialize_writer(self, data_csv, fieldnames, last_known_values):
-        writer = csv.DictWriter(data_csv, fieldnames=fieldnames)
-        writer.writeheader()
-        last_known_values = {field: None for field in fieldnames}
-        return writer
+        self.counters[origin] += 1
 
     def json_to_csv(self):
-
         sorted_data = sorted(self.json_data, key=self.get_timestamp)
-        lpb_csv_path = None
-        adv_csv_path = None
-        match self.interpolated:
-            case True:
-                lpb_csv_path = f"{self.csv_path}_none_filled_lpb.csv"
-                adv_csv_path = f"{self.csv_path}_none_filled_adv.csv"
-            case False:
-                lpb_csv_path = f"{self.csv_path}_interpolated_lpb.csv"
-                adv_csv_path = f"{self.csv_path}_interpolated_adv.csv"
+        suffix = "_none_filled" if self.interpolated else "_interpolated"
+        file_paths = {
+            origin: f"{self.csv_path}{suffix}_{device.name}.csv"
+            for origin, device in self.devices.items()
+        }
 
-        with (
-            open(lpb_csv_path, mode='w', newline='') as lpb_csv,
-            open(adv_csv_path, mode='w', newline='') as adv_csv
-        ):
-            # LPB initialization
-            writer_lpb = self.initialize_writer(lpb_csv, LPB_FIELDNAMES, self.last_known_values_lpb)
-            # ADV initialization
-            writer_adv = self.initialize_writer(adv_csv, LPB_FIELDNAMES, self.last_known_values_lpb)
+        writers = {}
+        files = {}
+        try:
+            for origin, device in self.devices.items():
+                file = open(file_paths[origin], mode='w', newline='')
+                writer = csv.DictWriter(file, fieldnames=device.fieldnames)
+                writer.writeheader()
+                self.last_known[origin] = {field: None for field in device.fieldnames}
+                writers[origin] = writer
+                files[origin] = file
 
             for record in sorted_data:
-                match record["header"].get("origin"):
-                    case 100:
-                        self.write_row(record, self.last_known_values_lpb, writer_lpb, self.lpb_counter, LPB_FIELDNAMES,
-                                       LPB_CHANNEL_MAPPING)
-                    case 130:
-                        self.write_row(record, self.last_known_values_adv, writer_adv, self.adv_counter, ADV_FIELDNAMES,
-                                       ADV_CHANNEL_MAPPING)
-                    case _:
-                        continue
+                origin = record["header"].get("origin")
+                if origin in self.devices:
+                    self.write_row(record, self.devices[origin], writers[origin])
 
-        for file_path in [lpb_csv_path, adv_csv_path]:
-            deletion = False
+        finally:
+            for file in files.values():
+                file.close()
+
+        # Remove empty files
+        for path in file_paths.values():
             try:
-                with open(file_path, 'r', encoding='utf-8') as csv_file:
-                    reader = csv.reader(csv_file)
-                    rows = list(reader)
-                    if len(rows) <= 1:
-                        deletion = True
-                if deletion:
-                    os.remove(file_path)
+                with open(path, 'r', encoding='utf-8') as f:
+                    if len(list(csv.reader(f))) <= 1:
+                        os.remove(path)
             except FileNotFoundError:
                 pass
 
