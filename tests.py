@@ -74,7 +74,7 @@ def plotter_test():
     plotter = Plotter(config_dict=config, dataframe_map=dataframes, plots_folder_path="plots")
     plotter.plot()
 
-'''
+
 def wavelet_test():
     df = df3.get_dataframe()
     print(df.columns)
@@ -94,7 +94,7 @@ def wavelet_test():
     else:
         d = c[-1]
 
-        # Compute noise threshold using median absolute deviation
+    # Compute noise threshold using median absolute deviation
     sigma = np.median(np.abs(d)) / 0.6745
     threshold = sigma * np.sqrt(2 * np.log(len(N20_PRES)))
 
@@ -125,9 +125,13 @@ def filtering_test():
         csv_path="tests/adv_07_03_2025_fixed.csv"
     )
     processor_filtered = DataProcessor(df3)
+    processor_filtered.scale_columns("data.ETM-16.scaled", 20)
     processor_filtered.add_filter("data.ETM-16.scaled", "wavelet_transform", wavelet_name='coif5', level=10,
                                   threshold_mode='soft')
+    processor_filtered.add_filter("data.ETM-16.scaled", "remove_negatives")
     processor_filtered.queue_filters()
+    processor_filtered.flip_column_sign("data.ETM-16.scaled")
+
     dataframes = {
         "db1": df3,
         "db2": df3_test
@@ -137,14 +141,16 @@ def filtering_test():
             "title": "Rocket Telemetry",
             "type": "line",
             "precise_grid": False,
-            "x_axis_label": "Time (s)",
+            "convert_epoch": "seconds",
+            "offset": -30000,
+            "x_axis_label": "Time (ms)",
             "y_axis_labels": {
                 "y1": "Pressure",
                 "y2": "Thrust"
             },
             "horizontal_lines": {
                 "max_temp": {
-                    "place": 3,
+                    "place": 85,
                     "label": "Max Safe Temp",
                     "color": "red"
                 }
@@ -185,7 +191,7 @@ def filtering_test():
 
     plotter = Plotter(config_dict=config, dataframe_map=dataframes, plots_folder_path="plots")
     plotter.plot()
-'''
+
 
 if __name__ == '__main__':
     df1 = DataFrameWrapper(
@@ -194,11 +200,9 @@ if __name__ == '__main__':
     df2 = DataFrameWrapper(
         csv_path="tests/lpb_16_03_2025_interpolated_lpb.csv",
     )
-    '''
     df3 = DataFrameWrapper(
         csv_path="tests/adv_07_03_2025_fixed.csv"
     )
-    '''
-    plotter_test()
+    # plotter_test()
     # wavelet_test()
-    # filtering_test()
+    filtering_test()

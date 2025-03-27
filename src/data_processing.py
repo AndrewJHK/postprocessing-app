@@ -1,7 +1,16 @@
 import dask.dataframe as dd
-from filters import DataFilter
+from src.filters import DataFilter
 
 EQUATIONS = {"biliq": "placeholder", "broom_stick": "placeholder"}
+
+
+def sync_with_wrapper(method):
+    def wrapper(self, *args, **kwargs):
+        result = method(self, *args, **kwargs)
+        self.df_wrapper.update_dataframe(self.df)
+        return result
+
+    return wrapper
 
 
 class DataFrameWrapper:
@@ -33,11 +42,12 @@ class DataProcessor:
         """Adds a predefined filter with parameters to be applied later."""
         self.filter_manager.add_filter(columns, filter_name, **kwargs)
 
+    @sync_with_wrapper
     def queue_filters(self):
         """Applies all filters to the DataFrame."""
         self.df = self.filter_manager.queue_filters(self.df)
-        self.df_wrapper.update_dataframe(self.df)
 
+    @sync_with_wrapper
     def normalize_columns(self, columns):
         """Applies min-max normalization to multiple columns."""
         if isinstance(columns, str):
@@ -48,6 +58,7 @@ class DataProcessor:
             max_val = self.df[column].max().compute()
             self.df[column] = (self.df[column] - min_val) / (max_val - min_val)
 
+    @sync_with_wrapper
     def scale_columns(self, columns, factor):
         """
         Multiplies multiple columns by a given factor.
@@ -58,10 +69,12 @@ class DataProcessor:
         for column in columns:
             self.df[column] = self.df[column] * factor
 
+    @sync_with_wrapper
     def sort_data(self, key, ascending=True):
         """Sorts the dataframe by a specific column."""
         self.df = self.df.sort_values(by=key, ascending=ascending)
 
+    @sync_with_wrapper
     def drop_data(self, columns=None, row_range=None, row_condition=None):
         """
         Drops specified columns and/or rows based on range or condition.
@@ -80,8 +93,7 @@ class DataProcessor:
         if row_condition:
             self.df = self.df[~self.df.map_partitions(lambda df: df.apply(row_condition, axis=1))]
 
-        self.df_wrapper.update_dataframe(self.df)
-
+    @sync_with_wrapper
     def scale_index_by_equation(self, equation_func, start_idx=None, end_idx=None):
         """
         Scales the DataFrame index based on a time-dependent function.
@@ -102,7 +114,6 @@ class DataProcessor:
             return partition
 
         self.df = self.df.map_partitions(apply_func)
-        self.df_wrapper.update_dataframe(self.df)
 
     def find_index_where_max(self, column_to_max, condition_column):
         """
@@ -120,6 +131,7 @@ class DataProcessor:
             return index, value
         return index
 
+    @sync_with_wrapper
     def flip_column_sign(self, columns):
         """
         Flips the sign of all values in the specified column(s).

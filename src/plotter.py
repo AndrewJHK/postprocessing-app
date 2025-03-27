@@ -55,7 +55,7 @@ class Plotter:
                     match self.convert_epoch:
                         case "seconds":
                             x_values = df[x_column].compute()
-                            x_values = (x_values - x_values.min()+self.offset) / 1000
+                            x_values = (x_values - x_values.min() + self.offset) / 1000
                         case "miliseconds":
                             x_values = df[x_column].compute()
                             x_values = x_values - x_values.min() + self.offset
@@ -128,11 +128,6 @@ class Plotter:
         plot.subplots_adjust(bottom=0.2)
         plot.legend(handles=legend_handles, bbox_to_anchor=(0.5, 0.02), loc="lower center",
                     bbox_transform=fig.transFigure, fancybox=True, shadow=True, ncol=3)
-
-        # Toolbar on top
-        mgr = plot.get_current_fig_manager()
-        if hasattr(mgr, 'toolbar'):
-            mgr.toolbar.pack(side='top', fill='x')
 
         plot.title(self.plot_name)
         self.save_plot(self.plot_name)
