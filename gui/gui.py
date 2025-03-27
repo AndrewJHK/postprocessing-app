@@ -1,8 +1,8 @@
 from PyQt6.QtWidgets import (
     QWidget, QPushButton, QLabel,
-    QVBoxLayout, QFileDialog, QHBoxLayout, QScrollArea
+    QVBoxLayout, QFileDialog, QHBoxLayout,
+    QScrollArea, QStackedWidget, QListWidget, QListWidgetItem, QSizePolicy
 )
-
 import os
 from src.data_processing import DataProcessor, DataFrameWrapper
 from src.json_parser import JSONParser
@@ -27,30 +27,92 @@ class FileWidget(QWidget):
         self.delete_callback(self)
 
 
+# Placeholder panels to be extended later
+class UploadPanel(QWidget):
+    def __init__(self):
+        super().__init__()
+        layout = QVBoxLayout()
+        layout.addWidget(QLabel("Upload Files Panel"))
+        self.setLayout(layout)
+
+
+class JsonConverterPanel(QWidget):
+    def __init__(self):
+        super().__init__()
+        layout = QVBoxLayout()
+        layout.addWidget(QLabel("JSON to CSV Converter Panel"))
+        self.setLayout(layout)
+
+
+class DataProcessingPanel(QWidget):
+    def __init__(self):
+        super().__init__()
+        layout = QVBoxLayout()
+        layout.addWidget(QLabel("Data Processing Panel"))
+        self.setLayout(layout)
+
+
+class PlottingPanel(QWidget):
+    def __init__(self):
+        super().__init__()
+        layout = QVBoxLayout()
+        layout.addWidget(QLabel("Plotting Panel"))
+        self.setLayout(layout)
+
+
 class PostProcessingApp(QWidget):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Postprocessing GUI")
-        self.resize(400, 300)
+        self.resize(1000, 700)
 
         self.file_widgets = []
 
-        main_layout = QVBoxLayout()
+        main_layout = QHBoxLayout()
 
-        self.load_button = QPushButton("Load File(s)")
-        self.load_button.clicked.connect(self.load_files)
-        main_layout.addWidget(self.load_button)
+        # Left Sidebar Layout
+        sidebar_layout = QVBoxLayout()
+        sidebar_layout.setSpacing(10)
 
+        self.load_button = QPushButton("1. Wczytaj dane")
+        self.converter_button = QPushButton("2. Konwerter JSON/CSV")
+        self.processing_button = QPushButton("3. Obróbka danych")
+        self.plotter_button = QPushButton("4. Wykresy")
+
+        sidebar_layout.addWidget(self.load_button)
+        sidebar_layout.addWidget(self.converter_button)
+        sidebar_layout.addWidget(self.processing_button)
+        sidebar_layout.addWidget(self.plotter_button)
+
+        # File list area
         self.scroll_area = QScrollArea()
         self.scroll_area.setWidgetResizable(True)
-
         self.file_list_widget = QWidget()
         self.file_list_layout = QVBoxLayout()
-        self.file_list_layout.setSpacing(5)
         self.file_list_widget.setLayout(self.file_list_layout)
-
         self.scroll_area.setWidget(self.file_list_widget)
-        main_layout.addWidget(self.scroll_area)
+        sidebar_layout.addWidget(self.scroll_area, stretch=1)
+
+        # Main content area with stacked views
+        self.stack = QStackedWidget()
+        self.upload_panel = UploadPanel()
+        self.converter_panel = JsonConverterPanel()
+        self.processing_panel = DataProcessingPanel()
+        self.plotting_panel = PlottingPanel()
+
+        self.stack.addWidget(self.upload_panel)      # index 0
+        self.stack.addWidget(self.converter_panel)   # index 1
+        self.stack.addWidget(self.processing_panel)  # index 2
+        self.stack.addWidget(self.plotting_panel)    # index 3
+
+        # Connect sidebar buttons to stack view
+        self.load_button.clicked.connect(lambda: self.stack.setCurrentIndex(0))
+        self.converter_button.clicked.connect(lambda: self.stack.setCurrentIndex(1))
+        self.processing_button.clicked.connect(lambda: self.stack.setCurrentIndex(2))
+        self.plotter_button.clicked.connect(lambda: self.stack.setCurrentIndex(3))
+
+        main_layout.addLayout(sidebar_layout, stretch=1)
+        main_layout.addWidget(self.stack, stretch=4)
 
         self.setLayout(main_layout)
 
