@@ -1,7 +1,7 @@
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QLabel, QComboBox, QHBoxLayout,
     QPushButton, QTextEdit, QLineEdit, QFormLayout,
-    QGroupBox, QFileDialog, QScrollArea, QListWidget, QFrame
+    QGroupBox, QFileDialog, QScrollArea, QListWidget, QFrame, QCheckBox
 )
 from PyQt6.QtCore import Qt
 from src.plotter import Plotter
@@ -19,6 +19,23 @@ class PlottingPanel(QWidget):
 
         self.plot_name = QLineEdit("Plot Title")
         layout.addWidget(self.plot_name)
+
+        self.x_axis_label = QLineEdit("Time")
+        self.y1_axis_label = QLineEdit("Y1 Axis")
+        self.y2_axis_label = QLineEdit("Y2 Axis")
+
+        layout.addWidget(QLabel("X Axis Label:"))
+        layout.addWidget(self.x_axis_label)
+        layout.addWidget(QLabel("Y1 Axis Label:"))
+        layout.addWidget(self.y1_axis_label)
+        layout.addWidget(QLabel("Y2 Axis Label:"))
+        layout.addWidget(self.y2_axis_label)
+
+        # Epoch conversion dropdown
+        self.convert_epoch = QComboBox()
+        self.convert_epoch.addItems(["none", "seconds", "miliseconds"])
+        layout.addWidget(QLabel("Convert epoch to:"))
+        layout.addWidget(self.convert_epoch)
 
         # Database selector dropdowns
         db_selector_layout = QHBoxLayout()
@@ -40,14 +57,24 @@ class PlottingPanel(QWidget):
         db_layout.addWidget(self.db2_box)
         layout.addLayout(db_layout)
 
+        # Horizontal and vertical lines side by side
+        line_inputs_layout = QHBoxLayout()
+
+        self.horizontal_lines = QTextEdit()
+        self.horizontal_lines.setPlaceholderText("Format: label=value,color")
+        line_inputs_layout.addWidget(QLabel("Horizontal Lines (y):"))
+        line_inputs_layout.addWidget(self.horizontal_lines)
+
+        self.vertical_lines = QTextEdit()
+        self.vertical_lines.setPlaceholderText("Format: label=value,color")
+        line_inputs_layout.addWidget(QLabel("Vertical Lines (x):"))
+        line_inputs_layout.addWidget(self.vertical_lines)
+
+        layout.addLayout(line_inputs_layout)
+
         self.generate_button = QPushButton("Generate Plot")
         self.generate_button.clicked.connect(self.generate_plot)
         layout.addWidget(self.generate_button)
-
-        self.status_log = QTextEdit()
-        self.status_log.setReadOnly(True)
-        layout.addWidget(QLabel("Logs:"))
-        layout.addWidget(self.status_log)
 
         self.setLayout(layout)
 
@@ -112,10 +139,6 @@ class PlottingPanel(QWidget):
         elif db_key == "db2":
             self.db2_box.channel_layout.addWidget(container)
 
-    def log(self, message):
-        logger.info(message)
-        self.status_log.append(message)
-
     def add_dataframe(self, file_path, wrapper):
         self.dataframes[file_path] = wrapper
         self.db1_selector.addItem(file_path)
@@ -148,15 +171,15 @@ class PlottingPanel(QWidget):
                 "title": self.plot_name.text(),
                 "type": "line",
                 "precise_grid": False,
-                "convert_epoch": "seconds",
+                "convert_epoch": self.convert_epoch.currentText(),
                 "offset": 0,
-                "x_axis_label": "Time",
+                "x_axis_label": self.x_axis_label.text(),
                 "y_axis_labels": {
-                    "y1": "Y1 Axis",
-                    "y2": "Y2 Axis"
+                    "y1": self.y1_axis_label.text(),
+                    "y2": self.y2_axis_label.text()
                 },
-                "horizontal_lines": {},
-                "vertical_lines": {}
+                "horizontal_lines": self.parse_lines(self.horizontal_lines.toPlainText()),
+                "vertical_lines": self.parse_lines(self.vertical_lines.toPlainText())
             },
             "databases": {}
         }
@@ -200,3 +223,20 @@ class PlottingPanel(QWidget):
             self.log("Plot generated successfully.")
         except Exception as e:
             self.log(f"Error during plot generation: {e}")
+
+    @staticmethod
+    def parse_lines(text):
+        lines = {}
+        for line in text.strip().split('\n'):
+            if '=' in line:
+                try:
+                    label, rest = line.split('=')
+                    value, color = rest.split(',')
+                    lines[label] = {"place": float(value), "label": label, "color": color}
+                except Exception:
+                    continue
+        return lines
+
+    @staticmethod
+    def log(message):
+        logger.info(message)
