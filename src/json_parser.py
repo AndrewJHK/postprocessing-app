@@ -33,40 +33,47 @@ ADV_CHANNEL_MAPPING = {
     "usb4716.chan14": "CH14",
     "usb4716.chan15": "CH15"
 }
-LPB_FIELDNAMES = [
-    "header.origin", "header.timestamp_epoch", "header.timestamp_human", "header.counter",
-    "data.TM1.raw", "data.TM1.scaled", "data.TM2.raw", "data.TM2.scaled",
-    "data.PT1.raw", "data.PT1.scaled", "data.PT2.raw", "data.PT2.scaled",
-    "data.PT3.raw", "data.PT3.scaled", "data.PT4.raw", "data.PT4.scaled",
-    "data.PT5.raw", "data.PT5.scaled", "data.PT6.raw", "data.PT6.scaled",
-    "data.cpu_temperature"
-]
-ADV_FIELDNAMES = [
-    "header.origin", "header.timestamp_epoch", "header.timestamp_human", "header.counter",
-    "data.N20_PRES.scaled", "data.CHAMBER_PRES.scaled",
-    "data.N20.scaled", "data.FUEL.scaled",
-    "data.CH4.scaled", "data.CH5.scaled",
-    "data.CH6.scaled", "data.CH7.scaled",
-    "data.CH8.scaled", "data.CH9.scaled",
-    "data.CH10.scaled", "data.CH11.scaled",
-    "data.CH12.scaled", "data.CH13.scaled",
-    "data.CH14.scaled", "data.CH15.scaled",
-    "data.cpu_temperature"
-]
-
 
 class JSONParser:
-    def __init__(self, json_data, csv_path, interpolated):
+    def __init__(self, json_data, csv_path, interpolated, dynamic_fields=False):
         self.json_data = json_data
         self.csv_path = csv_path
         self.interpolated = interpolated
+        self.dynamic_fields = dynamic_fields
 
         self.devices = {
-            100: DeviceCSVConfig("lpb", 100, LPB_FIELDNAMES, LPB_CHANNEL_MAPPING),
-            130: DeviceCSVConfig("adv", 130, ADV_FIELDNAMES, ADV_CHANNEL_MAPPING)
+            100: DeviceCSVConfig("lpb", 100, self._generate_fields(100, LPB_CHANNEL_MAPPING), LPB_CHANNEL_MAPPING),
+            130: DeviceCSVConfig("adv", 130, self._generate_fields(130, ADV_CHANNEL_MAPPING), ADV_CHANNEL_MAPPING)
         }
         self.last_known = {100: {}, 130: {}}
         self.counters = {100: 0, 130: 0}
+
+    def _generate_fields(self, origin_id, mapping):
+        if not self.dynamic_fields:
+            return [
+                "header.origin", "header.timestamp_epoch", "header.timestamp_human", "header.counter",
+                "data.cpu_temperature"
+            ] + [
+                f"data.{name}.{t}" for name in mapping.values() for t in ("raw", "scaled")
+            ]
+
+        fields = set()
+        for record in self.json_data:
+            if record["header"].get("origin") != origin_id:
+                continue
+            data = record.get("data", {})
+            for category, channels in data.items():
+                if category == "cpu_temperature":
+                    continue
+                for channel_key in channels:
+                    full_key = f"{category}.{channel_key}"
+                    label = mapping.get(full_key)
+                    if label:
+                        fields.add(f"data.{label}.raw")
+                        fields.add(f"data.{label}.scaled")
+        return [
+            "header.origin", "header.timestamp_epoch", "header.timestamp_human", "header.counter"
+        ] + sorted(fields) + ["data.cpu_temperature"]
 
     def write_row(self, record, device: DeviceCSVConfig, writer):
         origin = record["header"].get("origin", 0)
@@ -98,26 +105,28 @@ class JSONParser:
         for field_key, channels in record["data"].items():
             if field_key == "cpu_temperature":
                 continue
-
             for channel_key, channel_data in channels.items():
                 full_channel_name = f"{field_key}.{channel_key}"
                 channel_label = device.channel_mapping.get(full_channel_name)
-
-                if channel_label:
-                    raw_column = f"data.{channel_label}.raw"
-                    scaled_column = f"data.{channel_label}.scaled"
-
-                    if "raw" in channel_data:
-                        self.last_known[origin][raw_column] = channel_data["raw"]
-                    if "scaled" in channel_data:
-                        self.last_known[origin][scaled_column] = channel_data["scaled"]
-
-                    row_data[raw_column] = self.last_known[origin].get(raw_column)
-                    row_data[scaled_column] = self.last_known[origin].get(scaled_column)
+                if not channel_label:
+                    continue
+                raw_column = f"data.{channel_label}.raw"
+                scaled_column = f"data.{channel_label}.scaled"
+                if "raw" in channel_data:
+                    self.last_known[origin][raw_column] = channel_data["raw"]
+                if "scaled" in channel_data:
+                    self.last_known[origin][scaled_column] = channel_data["scaled"]
+                row_data[raw_column] = self.last_known[origin].get(raw_column)
+                row_data[scaled_column] = self.last_known[origin].get(scaled_column)
 
         for field in device.fieldnames:
             if field not in row_data:
                 row_data[field] = self.last_known[origin].get(field) if self.interpolated else None
+
+        # Check if all values are None except headers
+        non_header_keys = [k for k in row_data if not k.startswith("header") and k != "data.cpu_temperature"]
+        if all(row_data.get(k) is None for k in non_header_keys):
+            return  # Skip writing empty rows
 
         writer.writerow(row_data)
         self.counters[origin] += 1
@@ -150,12 +159,23 @@ class JSONParser:
             for file in files.values():
                 file.close()
 
-        # Remove empty files
         for path in file_paths.values():
             try:
                 with open(path, 'r', encoding='utf-8') as f:
-                    if len(list(csv.reader(f))) <= 1:
+                    reader = list(csv.reader(f))
+                    if len(reader) <= 1:
                         os.remove(path)
+                    else:
+                        # Drop empty columns
+                        headers = reader[0]
+                        transposed = list(zip(*reader[1:]))
+                        non_empty_cols = [i for i, col in enumerate(transposed) if any(cell.strip() != '' for cell in col)]
+                        cleaned = [[headers[i] for i in non_empty_cols]] + [
+                            [row[i] for i in non_empty_cols] for row in reader[1:]
+                        ]
+                        with open(path, 'w', newline='', encoding='utf-8') as f_out:
+                            writer = csv.writer(f_out)
+                            writer.writerows(cleaned)
             except FileNotFoundError:
                 pass
 
