@@ -108,6 +108,10 @@ class DataProcessingPanel(QWidget):
         index = self.file_selector.findText(file_path)
         if index >= 0:
             self.file_selector.removeItem(index)
+        self.refresh()
+
+    def refresh(self):
+        self.update_columns()
 
     def update_columns(self):
         self.clear_column_checkboxes()
@@ -140,7 +144,7 @@ class DataProcessingPanel(QWidget):
         param = self.operation_param.text()
 
         if not file_path or not columns or not operation:
-            self.log("Choose file, culumn and operation.")
+            self.log("Choose file, column and operation.")
             return
 
         processor = self.processors.get(file_path)

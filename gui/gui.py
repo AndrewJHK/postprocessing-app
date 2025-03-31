@@ -116,6 +116,7 @@ class PostProcessingApp(QWidget):
     def add_dataframe(self, file_path, wrapper: DataFrameWrapper):
         self.dataframes[file_path] = wrapper
         self.processing_panel.add_dataframe(file_path, wrapper)
+        self.plotting_panel.add_dataframe(file_path, wrapper)
 
     def _is_duplicate(self, file_path):
         return any(w.file_path == file_path for w in self.file_widgets)
@@ -136,3 +137,4 @@ class PostProcessingApp(QWidget):
             del self.dataframes[file_path]
 
         self.processing_panel.remove_dataframe(file_path)
+        self.plotting_panel.remove_dataframe(file_path)
