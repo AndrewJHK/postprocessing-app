@@ -3,7 +3,7 @@ from PyQt6.QtWidgets import (
     QPushButton, QTextEdit, QCheckBox, QLineEdit, QFormLayout,
     QGroupBox, QFileDialog, QScrollArea, QListWidget
 )
-from PyQt6.QtCore import Qt
+import re
 from src.data_processing import DataProcessor
 from src.logs import logger
 
@@ -173,11 +173,16 @@ class DataProcessingPanel(QWidget):
 
         try:
             params = dict(p.split('=') for p in raw_params.split(',') if '=' in p)
+            number_pattern = re.compile(r"^-?\d+(\.\d+)?$")
             for k in params:
-                try:
-                    params[k] = int(params[k]) if params[k].isdigit() else float(params[k])
-                except Exception as e:
-                    self.log(f"Error during operation: {e}")
+                value = params[k]
+                if number_pattern.fullmatch(value):
+                    if k == "level":
+                        params[k] = int(float(value))  # level must be int
+                    else:
+                        params[k] = float(value)
+                else:
+                    params[k] = value
             processor.add_filter(columns, filter_type, **params)
             self.queue_list.addItem(f"{filter_type} on {columns} with {params}")
             self.log(f"Added filter {filter_type} for {columns}")
