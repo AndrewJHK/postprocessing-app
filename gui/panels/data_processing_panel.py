@@ -1,7 +1,7 @@
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QLabel, QComboBox, QHBoxLayout,
     QPushButton, QTextEdit, QCheckBox, QLineEdit, QFormLayout,
-    QGroupBox, QFileDialog, QScrollArea, QListWidget
+    QGroupBox, QFileDialog, QScrollArea, QListWidget, QRadioButton
 )
 import re
 from src.data_processing import DataProcessor
@@ -41,12 +41,26 @@ class DataProcessingPanel(QWidget):
         self.operation_box = QGroupBox("Operations")
         self.operation_selector = QComboBox()
         self.operation_selector.addItems(["normalize", "scale", "flip_sign", "sort", "drop"])
+        self.operation_selector.currentTextChanged.connect(self.toggle_drop_mode)
         self.operation_param = QLineEdit()
         self.apply_op_button = QPushButton("Apply operation")
         self.apply_op_button.clicked.connect(self.apply_operation)
 
+        # Drop mode radios
+        self.drop_columns_radio = QRadioButton("Drop by columns")
+        self.drop_index_radio = QRadioButton("Drop by index range")
+        self.drop_condition_radio = QRadioButton("Drop by condition (lambda)")
+        self.drop_columns_radio.setChecked(True)
+        self.drop_index_radio.hide()
+        self.drop_columns_radio.hide()
+        self.drop_condition_radio.hide()
+
         op_layout = QFormLayout()
         op_layout.addRow("Operation:", self.operation_selector)
+        op_layout.addRow(self.drop_columns_radio)
+        op_layout.addRow(self.drop_index_radio)
+        op_layout.addRow(self.drop_condition_radio)
+        op_layout.addRow(QLabel("Parameters (ex. key1=val1,key2=val2):"))
         op_layout.addRow("Parameter:", self.operation_param)
         op_layout.addRow(self.apply_op_button)
         self.operation_box.setLayout(op_layout)
@@ -94,6 +108,12 @@ class DataProcessingPanel(QWidget):
         layout.addWidget(self.status_log)
 
         self.setLayout(layout)
+
+    def toggle_drop_mode(self, operation):
+        is_drop = operation == "drop"
+        self.drop_columns_radio.setVisible(is_drop)
+        self.drop_index_radio.setVisible(is_drop)
+        self.drop_condition_radio.setVisible(is_drop)
 
     def add_dataframe(self, file_path, wrapper):
         self.dataframes[file_path] = wrapper
@@ -143,8 +163,8 @@ class DataProcessingPanel(QWidget):
         operation = self.operation_selector.currentText()
         param = self.operation_param.text()
 
-        if not file_path or not columns or not operation:
-            self.log("Choose file, column and operation.")
+        if not file_path or not operation:
+            self.log("Choose file and operation.")
             return
 
         processor = self.processors.get(file_path)
@@ -159,7 +179,18 @@ class DataProcessingPanel(QWidget):
                 case "sort":
                     processor.sort_data(columns[0], ascending=True)
                 case "drop":
-                    processor.drop_data(columns=columns)
+                    if self.drop_columns_radio.isChecked():
+                        processor.drop_data(columns=columns)
+                    elif self.drop_index_radio.isChecked():
+                        start_end = param.split(',')
+                        if len(start_end) == 2:
+                            start, end = int(start_end[0]), int(start_end[1])
+                            processor.drop_data(row_range=(start, end))
+                    elif self.drop_condition_radio.isChecked():
+                        try:
+                            processor.drop_data(row_condition=lambda row: eval(param))
+                        except Exception as e:
+                            self.log(f"Invalid lambda: {e}")
             self.log(f"Applied operation: {operation} on columns: {columns}")
         except Exception as e:
             self.log(f"Error during operation: {e}")

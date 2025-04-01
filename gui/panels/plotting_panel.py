@@ -3,10 +3,8 @@ from PyQt6.QtWidgets import (
     QPushButton, QTextEdit, QLineEdit, QFormLayout,
     QGroupBox, QFileDialog, QScrollArea, QListWidget, QFrame, QCheckBox
 )
-from PyQt6.QtCore import Qt
 from src.plotter import Plotter
 from src.logs import logger
-import os
 
 
 class PlottingPanel(QWidget):
@@ -31,13 +29,15 @@ class PlottingPanel(QWidget):
         layout.addWidget(QLabel("Y2 Axis Label:"))
         layout.addWidget(self.y2_axis_label)
 
-        # Epoch conversion dropdown
+        self.offset_input = QLineEdit("0")
+        layout.addWidget(QLabel("Epoch offset (ms):"))
+        layout.addWidget(self.offset_input)
+
         self.convert_epoch = QComboBox()
         self.convert_epoch.addItems(["none", "seconds", "miliseconds"])
         layout.addWidget(QLabel("Convert epoch to:"))
         layout.addWidget(self.convert_epoch)
 
-        # Database selector dropdowns
         db_selector_layout = QHBoxLayout()
         self.db1_selector = QComboBox()
         self.db2_selector = QComboBox()
@@ -57,7 +57,6 @@ class PlottingPanel(QWidget):
         db_layout.addWidget(self.db2_box)
         layout.addLayout(db_layout)
 
-        # Horizontal and vertical lines side by side
         line_inputs_layout = QHBoxLayout()
 
         self.horizontal_lines = QTextEdit()
@@ -103,7 +102,6 @@ class PlottingPanel(QWidget):
         container = QFrame()
         form = QFormLayout()
 
-        # Dynamically load columns
         columns = []
         db_selector = self.db1_selector if db_key == "db1" else self.db2_selector
         db_path = db_selector.currentText()
@@ -166,13 +164,18 @@ class PlottingPanel(QWidget):
         db1_path = self.db1_selector.currentText()
         db2_path = self.db2_selector.currentText()
 
+        try:
+            offset_val = float(self.offset_input.text())
+        except ValueError:
+            offset_val = 0
+
         config = {
             "plot_settings": {
                 "title": self.plot_name.text(),
                 "type": "line",
                 "precise_grid": False,
                 "convert_epoch": self.convert_epoch.currentText(),
-                "offset": 0,
+                "offset": offset_val,
                 "x_axis_label": self.x_axis_label.text(),
                 "y_axis_labels": {
                     "y1": self.y1_axis_label.text(),

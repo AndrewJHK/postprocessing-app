@@ -193,16 +193,22 @@ def filtering_test():
     plotter.plot()
 
 
+def processor_test():
+    processor = DataProcessor(df3)
+    processor.drop_data(row_range=(1, 1000))
+
+
 if __name__ == '__main__':
     df1 = DataFrameWrapper(
         csv_path="tests/denoised_adv_16_03_2025.csv"
     )
     df2 = DataFrameWrapper(
-        csv_path="tests/lpb_16_03_2025_interpolated_lpb.csv",
+        csv_path="tests/interpolated_lpb.csv",
     )
     df3 = DataFrameWrapper(
         csv_path="tests/adv_07_03_2025_fixed.csv"
     )
     # plotter_test()
     # wavelet_test()
-    filtering_test()
+    # filtering_test()
+    processor_test()

@@ -88,7 +88,7 @@ class DataProcessor:
 
         if row_range:
             start, end = row_range
-            self.df = self.df[(self.df.index < start) | (self.df.index > end)]
+            self.df = self.df.loc[(self.df.index < start) | (self.df.index > end)]
 
         if row_condition:
             self.df = self.df[~self.df.map_partitions(lambda df: df.apply(row_condition, axis=1))]

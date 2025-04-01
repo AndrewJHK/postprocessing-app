@@ -76,6 +76,18 @@ class UploadPanel(QWidget):
                     self.add_file_widget(file_path)
                 self.log(f"Loaded CSV file: {file_path}")
 
+    def remove_dataframe(self, file_path):
+        if file_path in self.loaded_files:
+            self.loaded_files.remove(file_path)
+
+            # Remove from QListWidget
+            for i in range(self.file_list.count()):
+                if self.file_list.item(i).text() == file_path:
+                    self.file_list.takeItem(i)
+                    break
+
+            self.log(f"File removed: {file_path}")
+
     def load_json(self):
         files, _ = QFileDialog.getOpenFileNames(self, "Choose JSON files", filter="JSON Files (*.json)")
         for file_path in files:

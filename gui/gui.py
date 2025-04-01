@@ -55,10 +55,10 @@ class PostProcessingApp(QWidget):
         sidebar_layout = QVBoxLayout()
         sidebar_layout.setSpacing(10)
 
-        self.load_button = QPushButton("1. Wczytaj dane")
-        self.flight_plot_button = QPushButton("2. Wykres lotu")
-        self.processing_button = QPushButton("3. Obróbka danych")
-        self.plotter_button = QPushButton("4. Wykresy")
+        self.load_button = QPushButton("1. Load data")
+        self.flight_plot_button = QPushButton("2. Flight plot")
+        self.processing_button = QPushButton("3. Data processing")
+        self.plotter_button = QPushButton("4. Plotting")
 
         self.buttons = [
             self.load_button,
@@ -138,3 +138,4 @@ class PostProcessingApp(QWidget):
 
         self.processing_panel.remove_dataframe(file_path)
         self.plotting_panel.remove_dataframe(file_path)
+        self.upload_panel.remove_dataframe(file_path)
