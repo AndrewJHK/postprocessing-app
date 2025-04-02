@@ -103,6 +103,7 @@ class PlottingPanel(QWidget):
         form = QFormLayout()
 
         columns = []
+        colors = ['blue','red','green','cyan','purple','olive','pink','gray','brown']
         db_selector = self.db1_selector if db_key == "db1" else self.db2_selector
         db_path = db_selector.currentText()
 
@@ -117,8 +118,11 @@ class PlottingPanel(QWidget):
         channel_input.addItems(columns)
 
         label_input = QLineEdit()
-        color_input = QLineEdit()
-        alpha_input = QLineEdit()
+
+        color_input = QComboBox()
+        color_input.addItems(colors)
+
+        transparency_input = QLineEdit()
         y_axis_input = QComboBox()
         y_axis_input.addItems(["y1", "y2"])
         x_column_input = QLineEdit("header.timestamp_epoch")
@@ -126,7 +130,7 @@ class PlottingPanel(QWidget):
         form.addRow("Channel:", channel_input)
         form.addRow("Label:", label_input)
         form.addRow("Color:", color_input)
-        form.addRow("Alpha:", alpha_input)
+        form.addRow("Transparency:", transparency_input)
         form.addRow("Y Axis:", y_axis_input)
         form.addRow("X Column:", x_column_input)
 
@@ -163,7 +167,6 @@ class PlottingPanel(QWidget):
     def generate_plot(self):
         db1_path = self.db1_selector.currentText()
         db2_path = self.db2_selector.currentText()
-
         try:
             offset_val = float(self.offset_input.text())
         except ValueError:
@@ -196,16 +199,17 @@ class PlottingPanel(QWidget):
                 if widget:
                     fields = widget.findChildren(QLineEdit)
                     combo_boxes = widget.findChildren(QComboBox)
-                    if len(combo_boxes) >= 2:
+                    if len(combo_boxes) >= 3:
                         channel_combo = combo_boxes[0]
-                        y_axis_combo = combo_boxes[1]
+                        color_combo = combo_boxes[1]
+                        y_axis_combo = combo_boxes[2]
                         channel = channel_combo.currentText()
                         db_config["channels"][channel] = {
                             "label": fields[0].text(),
-                            "color": fields[1].text(),
-                            "alpha": float(fields[2].text()) if fields[2].text() else 1.0,
+                            "color": color_combo.currentText(),
+                            "alpha": float(fields[1].text()) if fields[1].text() else 1.0,
                             "y_axis": y_axis_combo.currentText(),
-                            "x_column": fields[3].text()
+                            "x_column": fields[2].text()
                         }
             if db_config["channels"]:
                 config["databases"][db_key] = db_config
@@ -219,7 +223,6 @@ class PlottingPanel(QWidget):
             selected_dataframes["db1"] = self.dataframes[db1_path]
         if db2_path in self.dataframes:
             selected_dataframes["db2"] = self.dataframes[db2_path]
-
         plotter = Plotter(config_dict=config, dataframe_map=selected_dataframes, plots_folder_path="plots")
         try:
             plotter.plot()
