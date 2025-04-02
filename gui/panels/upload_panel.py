@@ -97,11 +97,11 @@ class UploadPanel(QWidget):
                     with open(file_path, "r", encoding="utf-8") as f:
                         import json
                         data = json.load(f)
-                        parser = JSONParser(data, base_path, interpolated=self.interpolated, dynamic_fields=True)
+                        parser = JSONParser(data, base_path, interpolated=self.interpolated)
                         generated_paths = parser.json_to_csv()
                         for path in generated_paths:
                             if self.add_file_widget:
                                 self.add_file_widget(path)
-                        self.log(f"Converted JSON to CSV: {base_path}_interpolated_adv.csv / lpb.csv")
+                        self.log(f"Converted JSON to CSVs: {base_path}")
                 except Exception as e:
                     self.log(f"JSON conversion error: {e}")
