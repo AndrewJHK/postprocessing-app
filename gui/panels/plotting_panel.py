@@ -5,6 +5,7 @@ from PyQt6.QtWidgets import (
 )
 from src.plotter import Plotter
 from src.logs import logger
+from src.data_processing import DataProcessor
 
 
 class PlottingPanel(QWidget):
@@ -48,6 +49,26 @@ class PlottingPanel(QWidget):
         db_selector_layout.addWidget(QLabel("Select DB2:"))
         db_selector_layout.addWidget(self.db2_selector)
         layout.addLayout(db_selector_layout)
+
+        sync_layout = QHBoxLayout()
+
+        sync_col1_layout = QVBoxLayout()
+        sync_col1_layout.addWidget(QLabel("Sync column DB1:"))
+        self.sync_col1 = QComboBox()
+        sync_col1_layout.addWidget(self.sync_col1)
+        sync_layout.addLayout(sync_col1_layout)
+
+        sync_col2_layout = QVBoxLayout()
+        sync_col2_layout.addWidget(QLabel("Sync column DB2:"))
+        self.sync_col2 = QComboBox()
+        sync_col2_layout.addWidget(self.sync_col2)
+        sync_layout.addLayout(sync_col2_layout)
+
+        self.sync_button = QPushButton("Sync DBs by max column value")
+        self.sync_button.clicked.connect(self.sync_databases)
+        sync_layout.addWidget(self.sync_button)
+
+        layout.addLayout(sync_layout)
 
         self.db1_box = self.create_database_box("db1")
         self.db2_box = self.create_database_box("db2")
@@ -103,7 +124,7 @@ class PlottingPanel(QWidget):
         form = QFormLayout()
 
         columns = []
-        colors = ['blue','red','green','cyan','purple','olive','pink','gray','brown']
+        colors = ['blue', 'red', 'green', 'cyan', 'purple', 'olive', 'pink', 'gray', 'brown']
         db_selector = self.db1_selector if db_key == "db1" else self.db2_selector
         db_path = db_selector.currentText()
 
@@ -145,6 +166,8 @@ class PlottingPanel(QWidget):
         self.dataframes[file_path] = wrapper
         self.db1_selector.addItem(file_path)
         self.db2_selector.addItem(file_path)
+        self.refresh_channel_box("db1")
+        self.refresh_channel_box("db2")
 
     def remove_dataframe(self, file_path):
         if file_path in self.dataframes:
@@ -160,9 +183,44 @@ class PlottingPanel(QWidget):
         if db_key == "db1":
             for i in reversed(range(self.db1_box.channel_layout.count())):
                 self.db1_box.channel_layout.itemAt(i).widget().deleteLater()
+            self.sync_col1.clear()
+            path = self.db1_selector.currentText()
+            if path in self.dataframes:
+                df = self.dataframes[path].get_dataframe()
+                self.sync_col1.addItems(df.columns)
         elif db_key == "db2":
             for i in reversed(range(self.db2_box.channel_layout.count())):
                 self.db2_box.channel_layout.itemAt(i).widget().deleteLater()
+            self.sync_col2.clear()
+            path = self.db2_selector.currentText()
+            if path in self.dataframes:
+                df = self.dataframes[path].get_dataframe()
+                self.sync_col2.addItems(df.columns)
+
+    def sync_databases(self):
+        db1_path = self.db1_selector.currentText()
+        db2_path = self.db2_selector.currentText()
+        col1 = self.sync_col1.currentText()
+        col2 = self.sync_col2.currentText()
+
+        if db1_path not in self.dataframes or db2_path not in self.dataframes:
+            self.log("Both DBs must be selected for syncing.")
+            return
+
+        try:
+            dp1 = DataProcessor(self.dataframes[db1_path])
+            dp2 = DataProcessor(self.dataframes[db2_path])
+
+            _, val1 = dp1.find_index_where_max("header.timestamp_epoch", col1)
+            _, val2 = dp2.find_index_where_max("header.timestamp_epoch", col2)
+
+            offset = val1 - val2
+            self.log(f"Syncing DB2 by offset {offset} based on max of {col1} and {col2}")
+            df = dp2.get_processed_data()
+            df["header.timestamp_epoch"] += offset
+            dp2.df_wrapper.update_dataframe(df)
+        except Exception as e:
+            self.log(f"Error during DB sync: {e}")
 
     def generate_plot(self):
         db1_path = self.db1_selector.currentText()
