@@ -64,9 +64,14 @@ class PlottingPanel(QWidget):
         sync_col2_layout.addWidget(self.sync_col2)
         sync_layout.addLayout(sync_col2_layout)
 
-        self.sync_button = QPushButton("Sync DBs by max column value")
+        sync_return_layout = QVBoxLayout()
+        self.sync_button = QPushButton("Sync DBs/Get start offset")
         self.sync_button.clicked.connect(self.sync_databases)
-        sync_layout.addWidget(self.sync_button)
+        sync_return_layout.addWidget(self.sync_button)
+        self.start_offset = QLineEdit("Start offset:")
+        self.start_offset.setReadOnly(True)
+        sync_return_layout.addWidget(self.start_offset)
+        sync_layout.addLayout(sync_return_layout)
 
         layout.addLayout(sync_layout)
 
@@ -212,12 +217,16 @@ class PlottingPanel(QWidget):
             dp2 = DataProcessor(self.dataframes[db2_path])
 
             _, val1 = dp1.find_index_where_max("header.timestamp_epoch", col1)
-            _, val2 = dp2.find_index_where_max("header.timestamp_epoch", col2)
+            idx2, val2 = dp2.find_index_where_max("header.timestamp_epoch", col2)
 
             offset = val1 - val2
             self.log(f"Syncing DB2 by offset {offset} based on max of {col1} and {col2}")
             df = dp2.get_processed_data()
             df["header.timestamp_epoch"] += offset
+            first_value = df['header.timestamp_epoch'].compute().iloc[0]
+            start_offset = first_value - df['header.timestamp_epoch'].compute().iloc[idx2]
+            print(start_offset)
+            self.start_offset.setText(f"Start offset = {start_offset}")
             dp2.df_wrapper.update_dataframe(df)
         except Exception as e:
             self.log(f"Error during DB sync: {e}")
