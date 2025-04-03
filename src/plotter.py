@@ -13,7 +13,7 @@ class Plotter:
         self.convert_epoch = config_dict["plot_settings"].get("convert_epoch", None)
         self.plots_folder_path = plots_folder_path
         self.offset = config_dict["plot_settings"].get("offset", 0)
-
+        self.secondary_db_offset = config_dict["plot_settings"].get("secondary_db_offset", 0)
         self.axis_labels = {
             "x": config_dict["plot_settings"].get("x_axis_label", "X-Axis"),
             "y1": config_dict["plot_settings"].get("y_axis_labels", {}).get("y1", "Y1-Axis"),
@@ -50,20 +50,22 @@ class Plotter:
                 label = ch_conf.get("label", channel)
                 color = ch_conf.get("color", None)
                 alpha = ch_conf.get("alpha", 1.0)
-
+                effective_offset = self.offset
+                if db_key == "db2" and self.convert_epoch != "none":
+                    effective_offset += self.secondary_db_offset
                 if x_column in df.columns:
                     match self.convert_epoch:
                         case "seconds":
                             x_values = df[x_column].compute()
-                            x_values = (x_values - x_values.min() + self.offset) / 1000
+                            x_values = (x_values - x_values.min() + effective_offset) / 1000
                         case "miliseconds":
                             x_values = df[x_column].compute()
-                            x_values = x_values - x_values.min() + self.offset
+                            x_values = x_values - x_values.min() + effective_offset
                         case _:
-                            x_values = df[x_column].compute() + self.offset
+                            x_values = df[x_column].compute() + effective_offset
 
                 else:
-                    x_values = df.index.compute() + self.offset
+                    x_values = df.index.compute() + effective_offset
 
                 if channel in df.columns:
                     y_values = df[channel].compute()

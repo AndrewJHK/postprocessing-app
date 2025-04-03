@@ -12,6 +12,7 @@ class PlottingPanel(QWidget):
     def __init__(self):
         super().__init__()
         self.dataframes = {}
+        self.secondary_db_offset = 0
 
         layout = QVBoxLayout()
         layout.addWidget(QLabel("Plotting Panel"))
@@ -31,7 +32,7 @@ class PlottingPanel(QWidget):
         layout.addWidget(self.y2_axis_label)
 
         self.offset_input = QLineEdit("0")
-        layout.addWidget(QLabel("Epoch offset (ms):"))
+        layout.addWidget(QLabel("Offset (ms):"))
         layout.addWidget(self.offset_input)
 
         self.convert_epoch = QComboBox()
@@ -215,19 +216,24 @@ class PlottingPanel(QWidget):
         try:
             dp1 = DataProcessor(self.dataframes[db1_path])
             dp2 = DataProcessor(self.dataframes[db2_path])
+            df1 = dp1.get_processed_data()
+            df2 = dp2.get_processed_data()
 
-            _, val1 = dp1.find_index_where_max("header.timestamp_epoch", col1)
-            idx2, val2 = dp2.find_index_where_max("header.timestamp_epoch", col2)
+            idx1, val1 = dp1.find_index_where_max("header.timestamp_epoch", col1)
+            _, val2 = dp2.find_index_where_max("header.timestamp_epoch", col2)
+            self.secondary_db_offset = val1 - val2
+            self.log(f"Syncing DB2 by offset {self.secondary_db_offset} based on max of {col1} and {col2}")
 
-            offset = val1 - val2
-            self.log(f"Syncing DB2 by offset {offset} based on max of {col1} and {col2}")
-            df = dp2.get_processed_data()
-            df["header.timestamp_epoch"] += offset
-            first_value = df['header.timestamp_epoch'].compute().iloc[0]
-            start_offset = first_value - df['header.timestamp_epoch'].compute().iloc[idx2]
+            df2["header.timestamp_epoch"] = df2["header.timestamp_epoch"].compute() + self.secondary_db_offset
+            dp2.df_wrapper.update_dataframe(df2)
+
+            first_value = df1['header.timestamp_epoch'].compute().iloc[0]
+            start_offset = first_value - val1
+            print(first_value)
             print(start_offset)
+            print(df1['header.timestamp_epoch'].compute().iloc[idx1])
             self.start_offset.setText(f"Start offset = {start_offset}")
-            dp2.df_wrapper.update_dataframe(df)
+
         except Exception as e:
             self.log(f"Error during DB sync: {e}")
 
@@ -246,6 +252,7 @@ class PlottingPanel(QWidget):
                 "precise_grid": False,
                 "convert_epoch": self.convert_epoch.currentText(),
                 "offset": offset_val,
+                "secondary_db_offset": self.secondary_db_offset,
                 "x_axis_label": self.x_axis_label.text(),
                 "y_axis_labels": {
                     "y1": self.y1_axis_label.text(),
