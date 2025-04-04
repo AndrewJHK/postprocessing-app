@@ -1,0 +1,4 @@
+matplotlib~=3.7.0
+dask[dataframe]~=2024.10.0
+PyWavelets~=1.8.0
+PyQt6~=6.8.1
