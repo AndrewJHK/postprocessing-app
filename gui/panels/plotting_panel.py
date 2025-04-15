@@ -1,7 +1,7 @@
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QLabel, QComboBox, QHBoxLayout,
-    QPushButton, QTextEdit, QLineEdit, QFormLayout,
-    QGroupBox, QFileDialog, QScrollArea, QListWidget, QFrame, QCheckBox
+    QPushButton, QLineEdit, QFormLayout,
+    QGroupBox, QScrollArea, QListWidget, QFrame, QTextEdit, QRadioButton, QButtonGroup, QCheckBox
 )
 from src.plotter import Plotter
 from src.logs import logger
@@ -39,6 +39,21 @@ class PlottingPanel(QWidget):
         self.convert_epoch.addItems(["none", "seconds", "miliseconds"])
         layout.addWidget(QLabel("Convert epoch to:"))
         layout.addWidget(self.convert_epoch)
+
+        # Plot type and grid selection
+        plot_type_layout = QHBoxLayout()
+        self.radio_line = QRadioButton("Line Plot")
+        self.radio_scatter = QRadioButton("Scatter Plot")
+        self.grid_type = QCheckBox("Precise Grid")
+        self.radio_line.setChecked(True)
+        self.plot_type_group = QButtonGroup()
+        self.plot_type_group.addButton(self.radio_line)
+        self.plot_type_group.addButton(self.radio_scatter)
+        plot_type_layout.addWidget(QLabel("Plot Type:"))
+        plot_type_layout.addWidget(self.radio_line)
+        plot_type_layout.addWidget(self.radio_scatter)
+        plot_type_layout.addWidget(self.grid_type)
+        layout.addLayout(plot_type_layout)
 
         db_selector_layout = QHBoxLayout()
         self.db1_selector = QComboBox()
@@ -84,19 +99,12 @@ class PlottingPanel(QWidget):
         db_layout.addWidget(self.db2_box)
         layout.addLayout(db_layout)
 
-        line_inputs_layout = QHBoxLayout()
-
-        self.horizontal_lines = QTextEdit()
-        self.horizontal_lines.setPlaceholderText("Format: label=value,color")
-        line_inputs_layout.addWidget(QLabel("Horizontal Lines (y):"))
-        line_inputs_layout.addWidget(self.horizontal_lines)
-
-        self.vertical_lines = QTextEdit()
-        self.vertical_lines.setPlaceholderText("Format: label=value,color")
-        line_inputs_layout.addWidget(QLabel("Vertical Lines (x):"))
-        line_inputs_layout.addWidget(self.vertical_lines)
-
-        layout.addLayout(line_inputs_layout)
+        self.h_lines_box = self.create_lines_box("horizontal")
+        self.v_lines_box = self.create_lines_box("vertical")
+        lines_layout = QHBoxLayout()
+        lines_layout.addWidget(self.h_lines_box)
+        lines_layout.addWidget(self.v_lines_box)
+        layout.addLayout(lines_layout)
 
         self.generate_button = QPushButton("Generate Plot")
         self.generate_button.clicked.connect(self.generate_plot)
@@ -125,48 +133,77 @@ class PlottingPanel(QWidget):
         box.channel_layout = channel_layout
         return box
 
-    def add_plot_column(self, db_key):
+    def create_lines_box(self, line_type):
+        box = QGroupBox(f"{line_type.title()} Lines")
+        layout = QVBoxLayout()
+        box.setLayout(layout)
+
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        container = QWidget()
+        lines_layout = QVBoxLayout()
+        container.setLayout(lines_layout)
+        scroll.setWidget(container)
+
+        add_button = QPushButton(f"Add {line_type.title()} Line")
+        add_button.clicked.connect(lambda: self.add_line_row(lines_layout))
+
+        layout.addWidget(scroll)
+        layout.addWidget(add_button)
+        box.lines_layout = lines_layout
+        return box
+
+    def add_line_row(self, layout):
         container = QFrame()
         form = QFormLayout()
 
-        columns = []
-        colors = ['blue', 'red', 'green', 'cyan', 'purple', 'olive', 'pink', 'gray', 'brown']
-        db_selector = self.db1_selector if db_key == "db1" else self.db2_selector
-        db_path = db_selector.currentText()
-
-        if db_path in self.dataframes:
-            df = self.dataframes[db_path].get_dataframe()
-            try:
-                columns = df.columns
-            except Exception as e:
-                self.log(f"Failed to fetch columns from {db_path}: {e}")
-
-        channel_input = QComboBox()
-        channel_input.addItems(columns)
-
         label_input = QLineEdit()
+        value_input = QLineEdit()
 
         color_input = QComboBox()
-        color_input.addItems(colors)
+        color_input.addItems(['blue', 'red', 'green', 'cyan', 'purple', 'olive', 'pink', 'gray', 'brown'])
 
-        transparency_input = QLineEdit()
-        y_axis_input = QComboBox()
-        y_axis_input.addItems(["y1", "y2"])
-        x_column_input = QLineEdit("header.timestamp_epoch")
+        remove_button = QPushButton("Remove")
+        remove_button.clicked.connect(lambda: self.remove_input(container))
 
-        form.addRow("Channel:", channel_input)
         form.addRow("Label:", label_input)
+        form.addRow("Value:", value_input)
         form.addRow("Color:", color_input)
-        form.addRow("Transparency:", transparency_input)
-        form.addRow("Y Axis:", y_axis_input)
-        form.addRow("X Column:", x_column_input)
+        form.addRow(remove_button)
 
         container.setLayout(form)
+        layout.addWidget(container)
 
-        if db_key == "db1":
-            self.db1_box.channel_layout.addWidget(container)
-        elif db_key == "db2":
-            self.db2_box.channel_layout.addWidget(container)
+    def sync_databases(self):
+        db1_path = self.db1_selector.currentText()
+        db2_path = self.db2_selector.currentText()
+        col1 = self.sync_col1.currentText()
+        col2 = self.sync_col2.currentText()
+
+        if db1_path not in self.dataframes or db2_path not in self.dataframes:
+            self.log("Both DBs must be selected for syncing.")
+            return
+
+        try:
+            dp1 = DataProcessor(self.dataframes[db1_path])
+            dp2 = DataProcessor(self.dataframes[db2_path])
+            df1 = dp1.get_processed_data()
+            df2 = dp2.get_processed_data()
+
+            idx1, val1 = dp1.find_index_where_max("header.timestamp_epoch", col1)
+            _, val2 = dp2.find_index_where_max("header.timestamp_epoch", col2)
+            self.secondary_db_offset = val1 - val2
+            self.log(f"Syncing DB2 by offset {self.secondary_db_offset} based on max of {col1} and {col2}")
+
+            df2["header.timestamp_epoch"] = df2["header.timestamp_epoch"].compute() + self.secondary_db_offset
+            dp2.df_wrapper.update_dataframe(df2)
+
+            first_value = df1['header.timestamp_epoch'].compute().iloc[0]
+            start_offset = first_value - val1
+            self.start_offset.setText(f"Start offset = {start_offset}")
+
+        except Exception as e:
+            self.log(f"Error during DB sync: {e}")
 
     def add_dataframe(self, file_path, wrapper):
         self.dataframes[file_path] = wrapper
@@ -203,39 +240,66 @@ class PlottingPanel(QWidget):
                 df = self.dataframes[path].get_dataframe()
                 self.sync_col2.addItems(df.columns)
 
-    def sync_databases(self):
-        db1_path = self.db1_selector.currentText()
-        db2_path = self.db2_selector.currentText()
-        col1 = self.sync_col1.currentText()
-        col2 = self.sync_col2.currentText()
+    def add_plot_column(self, db_key):
+        container = QFrame()
+        form = QFormLayout()
 
-        if db1_path not in self.dataframes or db2_path not in self.dataframes:
-            self.log("Both DBs must be selected for syncing.")
-            return
+        columns = []
+        colors = ['blue', 'red', 'green', 'cyan', 'purple', 'olive', 'pink', 'gray', 'brown']
+        db_selector = self.db1_selector if db_key == "db1" else self.db2_selector
+        db_path = db_selector.currentText()
 
-        try:
-            dp1 = DataProcessor(self.dataframes[db1_path])
-            dp2 = DataProcessor(self.dataframes[db2_path])
-            df1 = dp1.get_processed_data()
-            df2 = dp2.get_processed_data()
+        if db_path in self.dataframes:
+            df = self.dataframes[db_path].get_dataframe()
+            try:
+                columns = df.columns
+            except Exception as e:
+                self.log(f"Failed to fetch columns from {db_path}: {e}")
 
-            idx1, val1 = dp1.find_index_where_max("header.timestamp_epoch", col1)
-            _, val2 = dp2.find_index_where_max("header.timestamp_epoch", col2)
-            self.secondary_db_offset = val1 - val2
-            self.log(f"Syncing DB2 by offset {self.secondary_db_offset} based on max of {col1} and {col2}")
+        channel_input = QComboBox()
+        channel_input.addItems(columns)
 
-            df2["header.timestamp_epoch"] = df2["header.timestamp_epoch"].compute() + self.secondary_db_offset
-            dp2.df_wrapper.update_dataframe(df2)
+        label_input = QLineEdit()
 
-            first_value = df1['header.timestamp_epoch'].compute().iloc[0]
-            start_offset = first_value - val1
-            print(first_value)
-            print(start_offset)
-            print(df1['header.timestamp_epoch'].compute().iloc[idx1])
-            self.start_offset.setText(f"Start offset = {start_offset}")
+        color_input = QComboBox()
+        color_input.addItems(colors)
 
-        except Exception as e:
-            self.log(f"Error during DB sync: {e}")
+        transparency_input = QLineEdit()
+        y_axis_input = QComboBox()
+        y_axis_input.addItems(["y1", "y2"])
+        x_column_input = QLineEdit("header.timestamp_epoch")
+
+        size_input = QLineEdit()
+        size_input.setPlaceholderText("Size for scatter")
+        size_input.setDisabled(True)
+
+        # Enable/disable size input based on plot type
+        def toggle_size():
+            if self.radio_scatter.isChecked():
+                size_input.setDisabled(False)
+            else:
+                size_input.setDisabled(True)
+
+        self.radio_line.toggled.connect(toggle_size)
+        self.radio_scatter.toggled.connect(toggle_size)
+
+        remove_button = QPushButton("Remove")
+        remove_button.clicked.connect(lambda: self.remove_input(container))
+
+        form.addRow("Channel:", channel_input)
+        form.addRow("Label:", label_input)
+        form.addRow("Color:", color_input)
+        form.addRow("Transparency:", transparency_input)
+        form.addRow("Y Axis:", y_axis_input)
+        form.addRow("X Column:", x_column_input)
+        form.addRow(remove_button)
+
+        container.setLayout(form)
+
+        if db_key == "db1":
+            self.db1_box.channel_layout.addWidget(container)
+        elif db_key == "db2":
+            self.db2_box.channel_layout.addWidget(container)
 
     def generate_plot(self):
         db1_path = self.db1_selector.currentText()
@@ -244,12 +308,12 @@ class PlottingPanel(QWidget):
             offset_val = float(self.offset_input.text())
         except ValueError:
             offset_val = 0
-
+        plot_type = "line" if self.radio_line.isChecked() else "scatter"
         config = {
             "plot_settings": {
                 "title": self.plot_name.text(),
-                "type": "line",
-                "precise_grid": False,
+                "type": plot_type,
+                "precise_grid": self.grid_type.isChecked(),
                 "convert_epoch": self.convert_epoch.currentText(),
                 "offset": offset_val,
                 "secondary_db_offset": self.secondary_db_offset,
@@ -258,8 +322,8 @@ class PlottingPanel(QWidget):
                     "y1": self.y1_axis_label.text(),
                     "y2": self.y2_axis_label.text()
                 },
-                "horizontal_lines": self.parse_lines(self.horizontal_lines.toPlainText()),
-                "vertical_lines": self.parse_lines(self.vertical_lines.toPlainText())
+                "horizontal_lines": self.collect_lines(self.h_lines_box.lines_layout),
+                "vertical_lines": self.collect_lines(self.v_lines_box.lines_layout)
             },
             "databases": {}
         }
@@ -297,6 +361,7 @@ class PlottingPanel(QWidget):
             selected_dataframes["db1"] = self.dataframes[db1_path]
         if db2_path in self.dataframes:
             selected_dataframes["db2"] = self.dataframes[db2_path]
+
         plotter = Plotter(config_dict=config, dataframe_map=selected_dataframes, plots_folder_path="plots")
         try:
             plotter.plot()
@@ -305,16 +370,26 @@ class PlottingPanel(QWidget):
             self.log(f"Error during plot generation: {e}")
 
     @staticmethod
-    def parse_lines(text):
+    def remove_input(widget):
+        widget.setParent(None)
+        widget.deleteLater()
+
+    @staticmethod
+    def collect_lines(layout):
         lines = {}
-        for line in text.strip().split('\n'):
-            if '=' in line:
-                try:
-                    label, rest = line.split('=')
-                    value, color = rest.split(',')
-                    lines[label] = {"place": float(value), "label": label, "color": color}
-                except Exception:
-                    continue
+        for i in range(layout.count()):
+            widget = layout.itemAt(i).widget()
+            if widget:
+                fields = widget.findChildren(QLineEdit)
+                combo_box = widget.findChildren(QComboBox)
+                if len(fields) >= 2:
+                    label = fields[0].text()
+                    try:
+                        value = float(fields[1].text())
+                        color = combo_box[0].currentText()
+                        lines[label] = {"place": value, "label": label, "color": color}
+                    except ValueError:
+                        continue
         return lines
 
     @staticmethod

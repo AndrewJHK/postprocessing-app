@@ -44,7 +44,6 @@ class PostProcessingApp(QWidget):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Postprocessing GUI")
-        self.resize(1000, 700)
 
         self.file_widgets = []
         self.dataframes = {}

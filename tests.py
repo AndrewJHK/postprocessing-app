@@ -7,6 +7,12 @@ import pywt
 
 
 def plotter_test():
+    df1 = DataFrameWrapper(
+        csv_path="tests/adv_07_03_2025_fixed.csv"
+    )
+    df2 = DataFrameWrapper(
+        csv_path="tests/interpolated_lpb.csv",
+    )
     dataframes = {
         "db1": df1,
         "db2": df2
@@ -15,7 +21,7 @@ def plotter_test():
     config = {
         "plot_settings": {
             "title": "Rocket Telemetry",
-            "type": "line",
+            "type": "scatter",
             "precise_grid": False,
             "convert_epoch": "seconds",
             "offset": -30000,
@@ -199,16 +205,11 @@ def processor_test():
 
 
 if __name__ == '__main__':
-    df1 = DataFrameWrapper(
-        csv_path="tests/denoised_adv_16_03_2025.csv"
-    )
-    df2 = DataFrameWrapper(
-        csv_path="tests/interpolated_lpb.csv",
-    )
+
     df3 = DataFrameWrapper(
         csv_path="tests/adv_07_03_2025_fixed.csv"
     )
-    # plotter_test()
+    plotter_test()
     # wavelet_test()
     # filtering_test()
-    processor_test()
+    #processor_test()
