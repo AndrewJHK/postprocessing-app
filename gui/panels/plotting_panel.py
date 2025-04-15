@@ -203,6 +203,23 @@ class PlottingPanel(QWidget):
         except Exception as e:
             self.log(f"Error during DB sync: {e}")
 
+    def add_dataframe(self, file_path, wrapper):
+        self.dataframes[file_path] = wrapper
+        self.db1_selector.addItem(file_path)
+        self.db2_selector.addItem(file_path)
+        self.refresh_channel_box("db1")
+        self.refresh_channel_box("db2")
+
+    def remove_dataframe(self, file_path):
+        if file_path in self.dataframes:
+            del self.dataframes[file_path]
+        index1 = self.db1_selector.findText(file_path)
+        if index1 >= 0:
+            self.db1_selector.removeItem(index1)
+        index2 = self.db2_selector.findText(file_path)
+        if index2 >= 0:
+            self.db2_selector.removeItem(index2)
+
     def refresh_channel_box(self, db_key):
         if db_key == "db1":
             for i in reversed(range(self.db1_box.channel_layout.count())):
@@ -348,11 +365,12 @@ class PlottingPanel(QWidget):
             widget = layout.itemAt(i).widget()
             if widget:
                 fields = widget.findChildren(QLineEdit)
-                if len(fields) >= 3:
+                combo_box = widget.findChildren(QComboBox)
+                if len(fields) >= 2:
                     label = fields[0].text()
                     try:
                         value = float(fields[1].text())
-                        color = fields[2].text()
+                        color = combo_box[0].currentText()
                         lines[label] = {"place": value, "label": label, "color": color}
                     except ValueError:
                         continue

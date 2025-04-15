@@ -74,12 +74,12 @@ class Plotter:
                         if self.plot_type == "line":
                             handle, = ax1.plot(x_values, y_values, label=label, color=color, alpha=alpha)
                         else:
-                            handle, = ax1.scatter(x_values, y_values, s=1, label=label, color=color, alpha=alpha)
+                            handle = ax1.scatter(x_values, y_values, s=1, label=label, color=color, alpha=alpha)
                     elif ax2:
                         if self.plot_type == "line":
                             handle, = ax2.plot(x_values, y_values, label=label, color=color, alpha=alpha)
                         else:
-                            handle, = ax2.scatter(x_values, y_values, s=1, label=label, color=color, alpha=alpha)
+                            handle = ax2.scatter(x_values, y_values, s=1, label=label, color=color, alpha=alpha)
                     legend_handles.append(handle)
 
         # Axis labels
