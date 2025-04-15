@@ -1,7 +1,7 @@
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QLabel, QComboBox, QHBoxLayout,
     QPushButton, QLineEdit, QFormLayout,
-    QGroupBox, QScrollArea, QListWidget, QFrame, QTextEdit, QRadioButton, QButtonGroup
+    QGroupBox, QScrollArea, QListWidget, QFrame, QTextEdit, QRadioButton, QButtonGroup, QCheckBox
 )
 from src.plotter import Plotter
 from src.logs import logger
@@ -40,10 +40,11 @@ class PlottingPanel(QWidget):
         layout.addWidget(QLabel("Convert epoch to:"))
         layout.addWidget(self.convert_epoch)
 
-        # Plot type selection
+        # Plot type and grid selection
         plot_type_layout = QHBoxLayout()
         self.radio_line = QRadioButton("Line Plot")
         self.radio_scatter = QRadioButton("Scatter Plot")
+        self.grid_type = QCheckBox("Precise Grid")
         self.radio_line.setChecked(True)
         self.plot_type_group = QButtonGroup()
         self.plot_type_group.addButton(self.radio_line)
@@ -51,6 +52,7 @@ class PlottingPanel(QWidget):
         plot_type_layout.addWidget(QLabel("Plot Type:"))
         plot_type_layout.addWidget(self.radio_line)
         plot_type_layout.addWidget(self.radio_scatter)
+        plot_type_layout.addWidget(self.grid_type)
         layout.addLayout(plot_type_layout)
 
         db_selector_layout = QHBoxLayout()
@@ -311,7 +313,7 @@ class PlottingPanel(QWidget):
             "plot_settings": {
                 "title": self.plot_name.text(),
                 "type": plot_type,
-                "precise_grid": False,
+                "precise_grid": self.grid_type.isChecked(),
                 "convert_epoch": self.convert_epoch.currentText(),
                 "offset": offset_val,
                 "secondary_db_offset": self.secondary_db_offset,
