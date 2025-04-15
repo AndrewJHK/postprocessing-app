@@ -267,6 +267,20 @@ class PlottingPanel(QWidget):
         y_axis_input.addItems(["y1", "y2"])
         x_column_input = QLineEdit("header.timestamp_epoch")
 
+        size_input = QLineEdit()
+        size_input.setPlaceholderText("Size for scatter")
+        size_input.setDisabled(True)
+
+        # Enable/disable size input based on plot type
+        def toggle_size():
+            if self.radio_scatter.isChecked():
+                size_input.setDisabled(False)
+            else:
+                size_input.setDisabled(True)
+
+        self.radio_line.toggled.connect(toggle_size)
+        self.radio_scatter.toggled.connect(toggle_size)
+
         remove_button = QPushButton("Remove")
         remove_button.clicked.connect(lambda: self.remove_input(container))
 

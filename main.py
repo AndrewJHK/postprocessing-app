@@ -5,5 +5,5 @@ import sys
 if __name__ == "__main__":
     app = QApplication(sys.argv)
     window = PostProcessingApp()
-    window.show()
+    window.showMaximized()
     sys.exit(app.exec())
