@@ -270,7 +270,6 @@ class PlottingPanel(QWidget):
         x_column_input = QLineEdit("header.timestamp_epoch")
 
         size_input = QLineEdit()
-        size_input.setPlaceholderText("Size for scatter")
         size_input.setDisabled(True)
 
         # Enable/disable size input based on plot type
@@ -292,6 +291,7 @@ class PlottingPanel(QWidget):
         form.addRow("Transparency:", transparency_input)
         form.addRow("Y Axis:", y_axis_input)
         form.addRow("X Column:", x_column_input)
+        form.addRow("Dot size:", size_input)
         form.addRow(remove_button)
 
         container.setLayout(form)
@@ -347,7 +347,8 @@ class PlottingPanel(QWidget):
                             "color": color_combo.currentText(),
                             "alpha": float(fields[1].text()) if fields[1].text() else 1.0,
                             "y_axis": y_axis_combo.currentText(),
-                            "x_column": fields[2].text()
+                            "x_column": fields[2].text(),
+                            "size": int(fields[3].text()) if fields[3].text() else 1
                         }
             if db_config["channels"]:
                 config["databases"][db_key] = db_config
