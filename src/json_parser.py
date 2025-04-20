@@ -11,6 +11,33 @@ DEVICE_NAME_MAPPING = {
     131: "adv_pcie",
     200: "comp"
 }
+CHANNEL_LABEL_MAPPINGS = {
+    130: {
+        "usb4716.chan0.scaled": "N2O",
+        "usb4716.chan1.scaled": "CHAMBER_PRES",
+        "usb4716.chan2.scaled": "N2O_PRES",
+        "usb4716.chan3.scaled": "FUEL"
+    },
+    100: {
+        "adc1.chan0.scaled": "TM2.scaled",
+        "adc1.chan0.raw": "TM2.raw",
+        "adc1.chan1.scaled": "PT2.scaled",
+        "adc1.chan1.raw": "PT2.raw",
+        "adc1.chan2.scaled": "PT1.scaled",
+        "adc1.chan2.raw": "PT1.raw",
+        "adc1.chan3.scaled": "TM1.scaled",
+        "adc1.chan3.raw": "TM1.raw",
+        "adc2.chan0.scaled": "PT5,scaled",
+        "adc2.chan0.raw": "PT5,raw",
+        "adc2.chan1.scaled": "PT6.scaled",
+        "adc2.chan1.raw": "PT6.raw",
+        "adc2.chan2.scaled": "PT4.scaled",
+        "adc2.chan2.raw": "PT4.raw",
+        "adc2.chan3.scaled": "PT3.scaled",
+        "adc2.chan3.raw": "PT3.raw"
+
+    }
+}
 
 
 class JSONParser:
@@ -35,14 +62,15 @@ class JSONParser:
                 self.fields_per_origin[origin] = set()
             flat = self.flatten_dict(record.get("data", {}))
             for full_key in flat:
-                self.fields_per_origin[origin].add(f"data.{full_key}")
+                mapped_key = self.map_key(origin, full_key)
+                self.fields_per_origin[origin].add(f"data.{mapped_key}")
 
     def _initialize_devices(self):
         for origin, fields in self.fields_per_origin.items():
             field_list = ["header.origin", "header.timestamp_epoch", "header.timestamp_human",
-                          "header.counter"] + sorted(fields) + ["data.cpu_temperature"]
+                          "header.counter"] + sorted(list(fields)) + ["data.cpu_temperature"]
             dev_name = DEVICE_NAME_MAPPING.get(origin, f"dev_{origin}")
-            self.devices[origin] = DeviceCSVConfig(dev_name, origin, field_list, {})
+            self.devices[origin] = DeviceCSVConfig(dev_name, origin, field_list, CHANNEL_LABEL_MAPPINGS.get(origin, {}))
             self.last_known[origin] = {}
             self.counters[origin] = 0
 
@@ -75,12 +103,15 @@ class JSONParser:
 
         flattened = self.flatten_dict(record.get("data", {}))
         for field_key, value in flattened.items():
-            full_key = f"data.{field_key}"
+            mapped_key = self.map_key(origin, field_key)
+            full_key = f"data.{mapped_key}"
             self.last_known[origin][full_key] = value
             row_data[full_key] = value
+
         for field in device.fieldnames:
             if field not in row_data:
                 row_data[field] = self.last_known[origin].get(field) if self.interpolated else None
+
         non_header_keys = [k for k in row_data if not k.startswith("header") and k != "data.cpu_temperature"]
         if all(row_data.get(k) is None for k in non_header_keys):
             return
@@ -90,7 +121,7 @@ class JSONParser:
 
     def json_to_csv(self):
         sorted_data = sorted(self.json_data, key=self.get_timestamp)
-        suffix = "_none_filled" if self.interpolated else "_interpolated"
+        suffix = "_interpolated" if self.interpolated else "_none_filled"
         file_paths = {
             origin: f"{self.csv_path}{suffix}_{device.name}.csv"
             for origin, device in self.devices.items()
@@ -148,6 +179,11 @@ class JSONParser:
             else:
                 items.append((new_key, v))
         return dict(items)
+
+    @staticmethod
+    def map_key(origin, key):
+        mapping = CHANNEL_LABEL_MAPPINGS.get(origin, {})
+        return mapping.get(key, key)
 
     @staticmethod
     def get_timestamp(record):

@@ -60,7 +60,7 @@ class UploadPanel(QWidget):
 
     def update_interpolation_mode(self):
         self.interpolated = self.interpolated_radio.isChecked()
-        logger.info(f"JSON conversion mode: {'Interpolated' if self.interpolated else 'None filled'}")
+        self.log(f"JSON conversion mode: {'Interpolated' if self.interpolated else 'None filled'}")
 
     def log(self, message):
         logger.info(message)
