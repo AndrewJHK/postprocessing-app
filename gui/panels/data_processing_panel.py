@@ -5,7 +5,7 @@ from PyQt6.QtWidgets import (
 )
 import re
 from src.data_processing import DataProcessor
-from src.logs import logger
+from src.processing_utils import logger
 
 
 class DataProcessingPanel(QWidget):

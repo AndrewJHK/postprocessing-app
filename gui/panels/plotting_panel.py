@@ -4,7 +4,7 @@ from PyQt6.QtWidgets import (
     QGroupBox, QScrollArea, QListWidget, QFrame, QTextEdit, QRadioButton, QButtonGroup, QCheckBox
 )
 from src.plotter import Plotter
-from src.logs import logger
+from src.processing_utils import logger
 from src.data_processing import DataProcessor
 
 

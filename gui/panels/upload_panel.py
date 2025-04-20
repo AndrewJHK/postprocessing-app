@@ -1,12 +1,14 @@
 from PyQt6.QtWidgets import (
     QWidget, QPushButton, QLabel, QVBoxLayout,
     QFileDialog, QHBoxLayout, QListWidget, QTextEdit,
-    QRadioButton, QButtonGroup
+    QRadioButton, QButtonGroup, QProgressDialog
 )
+from PyQt6.QtCore import QThreadPool, Qt
 import os
+import json
 from src.data_processing import DataFrameWrapper
 from src.json_parser import JSONParser
-from src.logs import logger
+from src.processing_utils import Worker, logger
 
 
 class UploadPanel(QWidget):
@@ -16,6 +18,7 @@ class UploadPanel(QWidget):
         self.add_file_widget = add_file_widget
         self.loaded_files = []
         self.interpolated = True
+        self.threadpool = QThreadPool()
 
         layout = QVBoxLayout()
 
@@ -65,11 +68,20 @@ class UploadPanel(QWidget):
 
     def load_csv(self):
         files, _ = QFileDialog.getOpenFileNames(self, "Choose CSV files", filter="CSV Files (*.csv)")
-        for file_path in files:
+        if not files:
+            return
+
+        self.show_processing_dialog()
+        worker = Worker(self._process_csv_files, files)
+        worker.signals.finished.connect(self.processing_dialog.close)
+        worker.signals.error.connect(lambda e: self.log(f"CSV error: {e}"))
+        self.threadpool.start(worker)
+
+    def _process_csv_files(self, file_paths):
+        for file_path in file_paths:
             if file_path and file_path not in self.loaded_files:
                 wrapper = DataFrameWrapper(file_path)
                 self.loaded_files.append(file_path)
-                self.file_list.addItem(file_path)
                 if self.add_callback:
                     self.add_callback(file_path, wrapper)
                 if self.add_file_widget:
@@ -80,7 +92,6 @@ class UploadPanel(QWidget):
         if file_path in self.loaded_files:
             self.loaded_files.remove(file_path)
 
-            # Remove from QListWidget
             for i in range(self.file_list.count()):
                 if self.file_list.item(i).text() == file_path:
                     self.file_list.takeItem(i)
@@ -90,18 +101,30 @@ class UploadPanel(QWidget):
 
     def load_json(self):
         files, _ = QFileDialog.getOpenFileNames(self, "Choose JSON files", filter="JSON Files (*.json)")
-        for file_path in files:
-            if file_path:
-                base_path = os.path.splitext(file_path)[0]
-                try:
-                    with open(file_path, "r", encoding="utf-8") as f:
-                        import json
-                        data = json.load(f)
-                        parser = JSONParser(data, base_path, interpolated=self.interpolated)
-                        generated_paths = parser.json_to_csv()
-                        for path in generated_paths:
-                            if self.add_file_widget:
-                                self.add_file_widget(path)
-                        self.log(f"Converted JSON to CSVs: {base_path}")
-                except Exception as e:
-                    self.log(f"JSON conversion error: {e}")
+        if not files:
+            return
+
+        self.show_processing_dialog()
+        worker = Worker(self._process_json_files, files)
+        worker.signals.finished.connect(self.processing_dialog.close)
+        worker.signals.error.connect(lambda e: self.log(f"JSON error: {e}"))
+        self.threadpool.start(worker)
+
+    def _process_json_files(self, file_paths):
+        for file_path in file_paths:
+            base_path = os.path.splitext(file_path)[0]
+            with open(file_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                parser = JSONParser(data, base_path, interpolated=self.interpolated)
+                generated_paths = parser.json_to_csv()
+                for path in generated_paths:
+                    if self.add_file_widget:
+                        self.add_file_widget(path)
+                self.log(f"Converted JSON to CSVs: {base_path}")
+
+    def show_processing_dialog(self):
+        self.processing_dialog = QProgressDialog("Processing, please wait...", None, 0, 0, self)
+        self.processing_dialog.setWindowModality(Qt.WindowModality.ApplicationModal)
+        self.processing_dialog.setCancelButton(None)
+        self.processing_dialog.setMinimumDuration(0)
+        self.processing_dialog.show()

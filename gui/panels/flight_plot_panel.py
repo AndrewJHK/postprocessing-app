@@ -1,5 +1,5 @@
 from PyQt6.QtWidgets import QWidget, QVBoxLayout, QLabel
-from src.logs import logger
+from src.processing_utils import logger
 
 
 class FlightPlotPanel(QWidget):

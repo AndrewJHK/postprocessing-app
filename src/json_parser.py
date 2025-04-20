@@ -13,17 +13,6 @@ DEVICE_NAME_MAPPING = {
 }
 
 
-def flatten_dict(d, parent_key='', sep='.'):
-    items = []
-    for k, v in d.items():
-        new_key = f"{parent_key}{sep}{k}" if parent_key else k
-        if isinstance(v, dict):
-            items.extend(flatten_dict(v, new_key, sep).items())
-        else:
-            items.append((new_key, v))
-    return dict(items)
-
-
 class JSONParser:
     def __init__(self, json_data, csv_path, interpolated):
         self.json_data = json_data
@@ -44,7 +33,7 @@ class JSONParser:
                 continue
             if origin not in self.fields_per_origin:
                 self.fields_per_origin[origin] = set()
-            flat = flatten_dict(record.get("data", {}))
+            flat = self.flatten_dict(record.get("data", {}))
             for full_key in flat:
                 self.fields_per_origin[origin].add(f"data.{full_key}")
 
@@ -84,7 +73,7 @@ class JSONParser:
             self.last_known[origin]["data.cpu_temperature"] = cpu_temp
         row_data["data.cpu_temperature"] = self.last_known[origin].get("data.cpu_temperature")
 
-        flattened = flatten_dict(record.get("data", {}))
+        flattened = self.flatten_dict(record.get("data", {}))
         for field_key, value in flattened.items():
             full_key = f"data.{field_key}"
             self.last_known[origin][full_key] = value
@@ -127,12 +116,13 @@ class JSONParser:
             for file in files.values():
                 file.close()
 
-        for path in file_paths.values():
+        for key, path in list(file_paths.items()):
             try:
                 with open(path, 'r', encoding='utf-8') as f:
                     reader = list(csv.reader(f))
                 if len(reader) <= 1:
                     os.remove(path)
+                    del file_paths[key]
                 else:
                     # Drop empty columns
                     headers = reader[0]
@@ -149,20 +139,19 @@ class JSONParser:
                 pass
         return list(file_paths.values())
 
+    def flatten_dict(self, d, parent_key='', sep='.'):
+        items = []
+        for k, v in d.items():
+            new_key = f"{parent_key}{sep}{k}" if parent_key else k
+            if isinstance(v, dict):
+                items.extend(self.flatten_dict(v, new_key, sep=sep).items())
+            else:
+                items.append((new_key, v))
+        return dict(items)
+
     @staticmethod
     def get_timestamp(record):
         timestamp_data = record["header"].get("timestamp", {})
         low = timestamp_data.get("low", 0)
         high = timestamp_data.get("high", 0)
         return (high * (2 ** 32)) + low
-
-    @staticmethod
-    def flatten_dict(d, parent_key='', sep='.'):
-        items = []
-        for k, v in d.items():
-            new_key = f"{parent_key}{sep}{k}" if parent_key else k
-            if isinstance(v, dict):
-                items.extend(flatten_dict(v, new_key, sep=sep).items())
-            else:
-                items.append((new_key, v))
-        return dict(items)
