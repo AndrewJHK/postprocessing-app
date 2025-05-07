@@ -3,9 +3,10 @@ from PyQt6.QtWidgets import (
     QPushButton, QTextEdit, QCheckBox, QLineEdit, QFormLayout,
     QGroupBox, QFileDialog, QScrollArea, QListWidget, QRadioButton
 )
-import re
+from PyQt6.QtCore import QThreadPool
 from src.data_processing import DataProcessor
-from src.processing_utils import logger
+from src.processing_utils import logger, Worker, show_processing_dialog
+import re
 
 
 class DataProcessingPanel(QWidget):
@@ -13,6 +14,7 @@ class DataProcessingPanel(QWidget):
         super().__init__()
         self.dataframes = {}
         self.processors = {}
+        self.threadpool = QThreadPool()
 
         layout = QVBoxLayout()
         layout.addWidget(QLabel("Data processing"))
@@ -69,9 +71,9 @@ class DataProcessingPanel(QWidget):
         # Filters
         self.filter_box = QGroupBox("Filters")
         self.filter_selector = QComboBox()
-        self.filter_selector.addItems(
-            ["remove_negatives", "remove_positives", "rolling_mean", "rolling_median", "threshold",
-             "wavelet_transform"])
+        self.filter_selector.addItems([
+            "remove_negatives", "remove_positives", "rolling_mean", "rolling_median", "threshold",
+            "wavelet_transform"])
         self.filter_param = QLineEdit()
         self.add_filter_button = QPushButton("Add filter")
         self.add_filter_button.clicked.connect(self.add_filter)
@@ -128,9 +130,6 @@ class DataProcessingPanel(QWidget):
         index = self.file_selector.findText(file_path)
         if index >= 0:
             self.file_selector.removeItem(index)
-        self.refresh()
-
-    def refresh(self):
         self.update_columns()
 
     def update_columns(self):
@@ -158,42 +157,45 @@ class DataProcessingPanel(QWidget):
         self.status_log.append(message)
 
     def apply_operation(self):
-        file_path = self.file_selector.currentText()
-        columns = self.get_selected_columns()
-        operation = self.operation_selector.currentText()
-        param = self.operation_param.text()
+        def task():
+            file_path = self.file_selector.currentText()
+            columns = self.get_selected_columns()
+            operation = self.operation_selector.currentText()
+            param = self.operation_param.text()
 
-        if not file_path or not operation:
-            self.log("Choose file and operation.")
-            return
+            if not file_path or not operation:
+                self.log("Choose file and operation.")
+                return
 
-        processor = self.processors.get(file_path)
-        try:
-            match operation:
-                case "normalize":
-                    processor.normalize_columns(columns)
-                case "scale":
-                    processor.scale_columns(columns, float(param))
-                case "flip_sign":
-                    processor.flip_column_sign(columns)
-                case "sort":
-                    processor.sort_data(columns[0], ascending=True)
-                case "drop":
-                    if self.drop_columns_radio.isChecked():
-                        processor.drop_data(columns=columns)
-                    elif self.drop_index_radio.isChecked():
-                        start_end = param.split(',')
-                        if len(start_end) == 2:
-                            start, end = int(start_end[0]), int(start_end[1])
-                            processor.drop_data(row_range=(start, end))
-                    elif self.drop_condition_radio.isChecked():
-                        try:
-                            processor.drop_data(row_condition=lambda row: eval(param))
-                        except Exception as e:
-                            self.log(f"Invalid lambda: {e}")
-            self.log(f"Applied operation: {operation} on columns: {columns}")
-        except Exception as e:
-            self.log(f"Error during operation: {e}")
+            processor = self.processors.get(file_path)
+            try:
+                match operation:
+                    case "normalize":
+                        processor.normalize_columns(columns)
+                    case "scale":
+                        processor.scale_columns(columns, float(param))
+                    case "flip_sign":
+                        processor.flip_column_sign(columns)
+                    case "sort":
+                        processor.sort_data(columns[0], ascending=True)
+                    case "drop":
+                        if self.drop_columns_radio.isChecked():
+                            processor.drop_data(columns=columns)
+                        elif self.drop_index_radio.isChecked():
+                            start_end = param.split(',')
+                            if len(start_end) == 2:
+                                start, end = int(start_end[0]), int(start_end[1])
+                                processor.drop_data(row_range=(start, end))
+                        elif self.drop_condition_radio.isChecked():
+                            try:
+                                processor.drop_data(row_condition=lambda row: eval(param))
+                            except Exception as e:
+                                self.log(f"Invalid lambda: {e}")
+                self.log(f"Applied operation: {operation} on columns: {columns}")
+            except Exception as e:
+                self.log(f"Error during operation: {e}")
+
+        show_processing_dialog(self, self.threadpool, Worker(task))
 
     def add_filter(self):
         file_path = self.file_selector.currentText()
@@ -209,7 +211,7 @@ class DataProcessingPanel(QWidget):
                 value = params[k]
                 if number_pattern.fullmatch(value):
                     if k == "level":
-                        params[k] = int(float(value))  # level must be int
+                        params[k] = int(value)
                     else:
                         params[k] = float(value)
                 else:
@@ -221,13 +223,13 @@ class DataProcessingPanel(QWidget):
             self.log(f"Error adding filter: {e}")
 
     def apply_filters(self):
-        file_path = self.file_selector.currentText()
-        processor = self.processors.get(file_path)
-        try:
+        def task():
+            file_path = self.file_selector.currentText()
+            processor = self.processors.get(file_path)
             processor.queue_filters()
             self.log("Applied all queued filters")
-        except Exception as e:
-            self.log(f"Error during filter application: {e}")
+
+        show_processing_dialog(self, self.threadpool, Worker(task))
 
     def save_to_file(self):
         file_path = self.file_selector.currentText()

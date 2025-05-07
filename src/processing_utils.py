@@ -1,4 +1,5 @@
-from PyQt6.QtCore import QRunnable, pyqtSignal, QObject
+from PyQt6.QtCore import Qt, QRunnable, pyqtSignal, QObject
+from PyQt6.QtWidgets import QProgressDialog
 import logging
 
 logger = logging.getLogger("postprocessing-app")
@@ -38,3 +39,14 @@ class Worker(QRunnable):
             self.signals.error.emit(str(e))
         finally:
             self.signals.finished.emit()
+
+
+def show_processing_dialog(parent, threadpool, worker):
+    dialog = QProgressDialog("Processing, please wait...", None, 0, 0, parent)
+    dialog.setWindowModality(Qt.WindowModality.ApplicationModal)
+    dialog.setCancelButton(None)
+    dialog.setMinimumDuration(0)
+    dialog.setWindowTitle("Processing...")
+    worker.signals.finished.connect(dialog.close)
+    threadpool.start(worker)
+    dialog.exec()

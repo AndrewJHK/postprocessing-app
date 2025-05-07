@@ -1,14 +1,14 @@
 from PyQt6.QtWidgets import (
     QWidget, QPushButton, QLabel, QVBoxLayout,
     QFileDialog, QHBoxLayout, QListWidget, QTextEdit,
-    QRadioButton, QButtonGroup, QProgressDialog
+    QRadioButton, QButtonGroup
 )
-from PyQt6.QtCore import QThreadPool, Qt
 import os
 import json
+from PyQt6.QtCore import QThreadPool
 from src.data_processing import DataFrameWrapper
 from src.json_parser import JSONParser
-from src.processing_utils import Worker, logger
+from src.processing_utils import logger, Worker, show_processing_dialog
 
 
 class UploadPanel(QWidget):
@@ -60,7 +60,7 @@ class UploadPanel(QWidget):
 
     def update_interpolation_mode(self):
         self.interpolated = self.interpolated_radio.isChecked()
-        self.log(f"JSON conversion mode: {'Interpolated' if self.interpolated else 'None filled'}")
+        logger.info(f"JSON conversion mode: {'Interpolated' if self.interpolated else 'None filled'}")
 
     def log(self, message):
         logger.info(message)
@@ -71,22 +71,19 @@ class UploadPanel(QWidget):
         if not files:
             return
 
-        self.show_processing_dialog()
-        worker = Worker(self._process_csv_files, files)
-        worker.signals.finished.connect(self.processing_dialog.close)
-        worker.signals.error.connect(lambda e: self.log(f"CSV error: {e}"))
-        self.threadpool.start(worker)
+        def task():
+            for file_path in files:
+                if file_path and file_path not in self.loaded_files:
+                    wrapper = DataFrameWrapper(file_path)
+                    self.loaded_files.append(file_path)
+                    self.file_list.addItem(file_path)
+                    if self.add_callback:
+                        self.add_callback(file_path, wrapper)
+                    if self.add_file_widget:
+                        self.add_file_widget(file_path)
+                    self.log(f"Loaded CSV file: {file_path}")
 
-    def _process_csv_files(self, file_paths):
-        for file_path in file_paths:
-            if file_path and file_path not in self.loaded_files:
-                wrapper = DataFrameWrapper(file_path)
-                self.loaded_files.append(file_path)
-                if self.add_callback:
-                    self.add_callback(file_path, wrapper)
-                if self.add_file_widget:
-                    self.add_file_widget(file_path)
-                self.log(f"Loaded CSV file: {file_path}")
+        show_processing_dialog(self, self.threadpool, Worker(task))
 
     def remove_dataframe(self, file_path):
         if file_path in self.loaded_files:
@@ -104,27 +101,19 @@ class UploadPanel(QWidget):
         if not files:
             return
 
-        self.show_processing_dialog()
-        worker = Worker(self._process_json_files, files)
-        worker.signals.finished.connect(self.processing_dialog.close)
-        worker.signals.error.connect(lambda e: self.log(f"JSON error: {e}"))
-        self.threadpool.start(worker)
+        def task():
+            for file_path in files:
+                base_path = os.path.splitext(file_path)[0]
+                try:
+                    with open(file_path, "r", encoding="utf-8") as f:
+                        data = json.load(f)
+                        parser = JSONParser(data, base_path, interpolated=self.interpolated)
+                        generated_paths = parser.json_to_csv()
+                        for path in generated_paths:
+                            if self.add_file_widget:
+                                self.add_file_widget(path)
+                        self.log(f"Converted JSON to CSVs: {base_path}")
+                except Exception as e:
+                    self.log(f"JSON conversion error: {e}")
 
-    def _process_json_files(self, file_paths):
-        for file_path in file_paths:
-            base_path = os.path.splitext(file_path)[0]
-            with open(file_path, "r", encoding="utf-8") as f:
-                data = json.load(f)
-                parser = JSONParser(data, base_path, interpolated=self.interpolated)
-                generated_paths = parser.json_to_csv()
-                for path in generated_paths:
-                    if self.add_file_widget:
-                        self.add_file_widget(path)
-                self.log(f"Converted JSON to CSVs: {base_path}")
-
-    def show_processing_dialog(self):
-        self.processing_dialog = QProgressDialog("Processing, please wait...", None, 0, 0, self)
-        self.processing_dialog.setWindowModality(Qt.WindowModality.ApplicationModal)
-        self.processing_dialog.setCancelButton(None)
-        self.processing_dialog.setMinimumDuration(0)
-        self.processing_dialog.show()
+        show_processing_dialog(self, self.threadpool, Worker(task))

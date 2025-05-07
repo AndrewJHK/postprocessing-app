@@ -7,14 +7,7 @@ from gui.panels.data_processing_panel import DataProcessingPanel
 from gui.panels.flight_plot_panel import FlightPlotPanel
 from gui.panels.plotting_panel import PlottingPanel
 from src.data_processing import DataFrameWrapper
-import logging
-
-logger = logging.getLogger(__name__)
-file_handler = logging.FileHandler("app.log", mode='a', encoding='utf-8')
-file_handler.setFormatter(logging.Formatter('%(asctime)s - %(levelname)s - %(message)s'))
-logger.addHandler(file_handler)
-logger.setLevel(logging.INFO)
-logger.propagate = False
+from src.processing_utils import logger
 
 
 class FileWidget(QWidget):

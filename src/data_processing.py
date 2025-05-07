@@ -93,6 +93,8 @@ class DataProcessor:
         if row_condition:
             self.df = self.df[~self.df.map_partitions(lambda df: df.apply(row_condition, axis=1))]
 
+        self.df = self.df.persist()
+
     @sync_with_wrapper
     def scale_index_by_equation(self, equation_func, start_idx=None, end_idx=None):
         """
