@@ -102,7 +102,7 @@ selection.
 
 Possible operations are:
 
-- **normalize** - take content of each selected column and perform a normalization of data between two values
+- **normalize** - take content of each selected column and perform a min-max value normalization of them
 - **scale** - take content of each selected column and scale them by a factor provided in parameters box - 'factor=x'
 - **flip_sign** - take content of each selected columns and change the sign + into -, </br> - into +
 - **sort** - select only one column and sort the whole data by that specific column. In parameters specify if it should

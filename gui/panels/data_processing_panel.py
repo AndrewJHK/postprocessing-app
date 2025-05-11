@@ -44,7 +44,9 @@ class DataProcessingPanel(QWidget):
         self.operation_selector = QComboBox()
         self.operation_selector.addItems(["normalize", "scale", "flip_sign", "sort", "drop"])
         self.operation_selector.currentTextChanged.connect(self.toggle_drop_mode)
+        self.operation_selector.currentTextChanged.connect(self.update_placeholder_operations)
         self.operation_param = QLineEdit()
+        self.operation_param.setEnabled(False)
         self.apply_op_button = QPushButton("Apply operation")
         self.apply_op_button.clicked.connect(self.apply_operation)
 
@@ -62,7 +64,6 @@ class DataProcessingPanel(QWidget):
         op_layout.addRow(self.drop_columns_radio)
         op_layout.addRow(self.drop_index_radio)
         op_layout.addRow(self.drop_condition_radio)
-        op_layout.addRow(QLabel("Parameters (ex. key1=val1,key2=val2):"))
         op_layout.addRow("Parameter:", self.operation_param)
         op_layout.addRow(self.apply_op_button)
         self.operation_box.setLayout(op_layout)
@@ -74,13 +75,14 @@ class DataProcessingPanel(QWidget):
         self.filter_selector.addItems([
             "remove_negatives", "remove_positives", "rolling_mean", "rolling_median", "threshold",
             "wavelet_transform"])
+        self.filter_selector.currentTextChanged.connect(self.update_placeholder_filters)
         self.filter_param = QLineEdit()
+        self.filter_param.setEnabled(False)
         self.add_filter_button = QPushButton("Add filter")
         self.add_filter_button.clicked.connect(self.add_filter)
 
         filter_layout = QFormLayout()
         filter_layout.addRow("Filter:", self.filter_selector)
-        filter_layout.addRow(QLabel("Parameters (ex. key1=val1,key2=val2):"))
         filter_layout.addRow(self.filter_param)
         filter_layout.addRow(self.add_filter_button)
         self.filter_box.setLayout(filter_layout)
@@ -116,6 +118,39 @@ class DataProcessingPanel(QWidget):
         self.drop_columns_radio.setVisible(is_drop)
         self.drop_index_radio.setVisible(is_drop)
         self.drop_condition_radio.setVisible(is_drop)
+
+    def update_placeholder_operations(self, operation):
+        placeholders = {
+            "normalize": "factor=x",
+            "scale": "100",
+            "flip_sign": "",
+            "sort": "ascending=True/False",
+            "drop": "e.g. 100,200 or row['column'] > 0"
+        }
+        match operation:
+            case "normalize" | "flip_sign":
+                self.operation_param.setText(placeholders.get(operation, ""))
+                self.operation_param.setEnabled(False)
+            case _:
+                self.operation_param.setText(placeholders.get(operation, ""))
+                self.operation_param.setEnabled(True)
+
+    def update_placeholder_filters(self, operation):
+        placeholders = {
+            "remove_negatives": "",
+            "remove_positives": "",
+            "rolling_mean": "window=2137",
+            "rolling_median": "window=2137",
+            "threshold": "threshold=2137",
+            "wavelet_transform": "wavelet_name=coif5,level=10,threshold_mode=soft"
+        }
+        match operation:
+            case "remove_negatives" | "remove_positives":
+                self.filter_param.setText(placeholders.get(operation, ""))
+                self.filter_param.setEnabled(False)
+            case _:
+                self.filter_param.setText(placeholders.get(operation, ""))
+                self.filter_param.setEnabled(True)
 
     def add_dataframe(self, file_path, wrapper):
         self.dataframes[file_path] = wrapper
