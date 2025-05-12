@@ -157,8 +157,8 @@ class PlottingPanel(QWidget):
         container = QFrame()
         form = QFormLayout()
 
-        label_input = QLineEdit()
-        value_input = QLineEdit()
+        label_input = QLineEdit("Placeholder")
+        value_input = QLineEdit("2137")
 
         color_input = QComboBox()
         color_input.addItems(['blue', 'red', 'green', 'cyan', 'purple', 'olive', 'pink', 'gray', 'brown'])
@@ -259,18 +259,20 @@ class PlottingPanel(QWidget):
         channel_input = QComboBox()
         channel_input.addItems(columns)
 
-        label_input = QLineEdit()
+        label_input = QLineEdit("Placeholder")
 
         color_input = QComboBox()
         color_input.addItems(colors)
 
-        transparency_input = QLineEdit()
+        transparency_input = QLineEdit("1")
         y_axis_input = QComboBox()
         y_axis_input.addItems(["y1", "y2"])
-        x_column_input = QLineEdit("header.timestamp_epoch")
+
+        x_column_input = QComboBox()
+        x_column_input.addItems(columns)
 
         size_input = QLineEdit()
-        size_input.setDisabled(True)
+        size_input.setDisabled(not self.radio_scatter.isChecked())
 
         # Enable/disable size input based on plot type
         def toggle_size():
@@ -337,17 +339,18 @@ class PlottingPanel(QWidget):
                 if widget:
                     fields = widget.findChildren(QLineEdit)
                     combo_boxes = widget.findChildren(QComboBox)
-                    if len(combo_boxes) >= 3:
+                    if len(combo_boxes) >= 4:
                         channel_combo = combo_boxes[0]
                         color_combo = combo_boxes[1]
                         y_axis_combo = combo_boxes[2]
+                        x_axis_combo = combo_boxes[3]
                         channel = channel_combo.currentText()
                         db_config["channels"][channel] = {
                             "label": fields[0].text(),
                             "color": color_combo.currentText(),
                             "alpha": float(fields[1].text()) if fields[1].text() else 1.0,
                             "y_axis": y_axis_combo.currentText(),
-                            "x_column": fields[2].text(),
+                            "x_column": x_axis_combo.currentText(),
                             "size": int(fields[3].text()) if fields[3].text() else 1
                         }
             if db_config["channels"]:

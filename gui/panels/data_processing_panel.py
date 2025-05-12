@@ -3,10 +3,11 @@ from PyQt6.QtWidgets import (
     QPushButton, QTextEdit, QCheckBox, QLineEdit, QFormLayout,
     QGroupBox, QFileDialog, QScrollArea, QListWidget, QRadioButton
 )
-from PyQt6.QtCore import QThreadPool
+from PyQt6.QtCore import QThreadPool, QTimer
 from src.data_processing import DataProcessor
 from src.processing_utils import logger, Worker, show_processing_dialog
 import re
+import time
 
 
 class DataProcessingPanel(QWidget):
@@ -216,6 +217,7 @@ class DataProcessingPanel(QWidget):
                     case "drop":
                         if self.drop_columns_radio.isChecked():
                             processor.drop_data(columns=columns)
+                            QTimer.singleShot(200, self.update_columns)
                         elif self.drop_index_radio.isChecked():
                             start_end = param.split(',')
                             if len(start_end) == 2:
@@ -272,5 +274,8 @@ class DataProcessingPanel(QWidget):
         if processor:
             save_path, _ = QFileDialog.getSaveFileName(self, "Save as", filter="CSV Files (*.csv)")
             if save_path:
-                processor.save_data(save_path)
-                self.log(f"Data saved to: {save_path}")
+                def task():
+                    processor.save_data(save_path)
+                    self.log(f"Data saved to: {save_path}")
+
+                show_processing_dialog(self, self.threadpool, Worker(task))
