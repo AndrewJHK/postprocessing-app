@@ -7,7 +7,6 @@ from PyQt6.QtCore import QThreadPool, QTimer
 from src.data_processing import DataProcessor
 from src.processing_utils import logger, Worker, show_processing_dialog
 import re
-import time
 
 
 class DataProcessingPanel(QWidget):
@@ -16,6 +15,19 @@ class DataProcessingPanel(QWidget):
         self.dataframes = {}
         self.processors = {}
         self.threadpool = QThreadPool()
+        self.help_map = {
+            "normalize": "Take content of each selected column and perform a min-max value normalization of them",
+            "scale": "Take content of each selected column and scale them by a factor provided in parameters box",
+            "flip_sign": "Take content of each selected columns and change the sign + into -,- into + ",
+            "sort": "Select only one column and sort the whole data by that specific column.In parameters specify if it should be ascending or descending by writing 'ascending=True/False'",
+            "drop": "Drop the data base on a selected condition",
+            "remove_negatives": "Replace all negative values with 0",
+            "remove_positives": "Replace all positive values with 0",
+            "rolling_mean": "Perform a rolling mean filter with a specified windows size in parameters",
+            "rolling_median": "Perform a rolling median filter with a specified windows size in parameters",
+            "threshold": "Replace all the values that exceed a provided value with that value",
+            "wavelet_transform": " Perform a wavelet decomposition and recomposition with specified parameters"
+        }
 
         layout = QVBoxLayout()
         layout.addWidget(QLabel("Data processing"))
@@ -46,8 +58,12 @@ class DataProcessingPanel(QWidget):
         self.operation_selector.addItems(["normalize", "scale", "flip_sign", "sort", "drop"])
         self.operation_selector.currentTextChanged.connect(self.toggle_drop_mode)
         self.operation_selector.currentTextChanged.connect(self.update_placeholder_operations)
+        self.operation_selector.currentTextChanged.connect(self.update_operation_help)
         self.operation_param = QLineEdit()
         self.operation_param.setEnabled(False)
+        self.operation_help = QLabel(
+            "Take content of each selected column and perform a min-max value normalization of them")
+        self.operation_help.setWordWrap(True)
         self.apply_op_button = QPushButton("Apply operation")
         self.apply_op_button.clicked.connect(self.apply_operation)
 
@@ -67,6 +83,7 @@ class DataProcessingPanel(QWidget):
         op_layout.addRow(self.drop_condition_radio)
         op_layout.addRow("Parameter:", self.operation_param)
         op_layout.addRow(self.apply_op_button)
+        op_layout.addRow(self.operation_help)
         self.operation_box.setLayout(op_layout)
         side_layout.addWidget(self.operation_box)
 
@@ -77,8 +94,11 @@ class DataProcessingPanel(QWidget):
             "remove_negatives", "remove_positives", "rolling_mean", "rolling_median", "threshold",
             "wavelet_transform"])
         self.filter_selector.currentTextChanged.connect(self.update_placeholder_filters)
+        self.filter_selector.currentTextChanged.connect(self.update_filter_help)
         self.filter_param = QLineEdit()
         self.filter_param.setEnabled(False)
+        self.filter_help = QLabel("Replace all negative values with 0")
+        self.filter_help.setWordWrap(True)
         self.add_filter_button = QPushButton("Add filter")
         self.add_filter_button.clicked.connect(self.add_filter)
 
@@ -86,6 +106,7 @@ class DataProcessingPanel(QWidget):
         filter_layout.addRow("Filter:", self.filter_selector)
         filter_layout.addRow(self.filter_param)
         filter_layout.addRow(self.add_filter_button)
+        filter_layout.addRow(self.filter_help)
         self.filter_box.setLayout(filter_layout)
         side_layout.addWidget(self.filter_box)
 
@@ -152,6 +173,12 @@ class DataProcessingPanel(QWidget):
             case _:
                 self.filter_param.setText(placeholders.get(operation, ""))
                 self.filter_param.setEnabled(True)
+
+    def update_filter_help(self):
+        self.filter_help.setText(self.help_map.get(self.filter_selector.currentText(), ""))
+
+    def update_operation_help(self):
+        self.operation_help.setText(self.help_map.get(self.operation_selector.currentText(), ""))
 
     def add_dataframe(self, file_path, wrapper):
         self.dataframes[file_path] = wrapper

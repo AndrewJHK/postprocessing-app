@@ -71,19 +71,22 @@ class UploadPanel(QWidget):
         if not files:
             return
 
-        def task():
-            for file_path in files:
-                if file_path and file_path not in self.loaded_files:
-                    wrapper = DataFrameWrapper(file_path)
-                    self.loaded_files.append(file_path)
-                    self.file_list.addItem(file_path)
+        for file_path in files:
+            def task(path=file_path, signals=None):
+                if path and path not in self.loaded_files:
+                    wrapper = DataFrameWrapper(path)
+                    self.loaded_files.append(path)
+                    self.file_list.addItem(path)
                     if self.add_callback:
-                        self.add_callback(file_path, wrapper)
-                    if self.add_file_widget:
-                        self.add_file_widget(file_path)
-                    self.log(f"Loaded CSV file: {file_path}")
+                        self.add_callback(path, wrapper)
+                    if signals:
+                        signals.file_ready.emit(path)
+                    self.log(f"Loaded CSV file: {path}")
 
-        show_processing_dialog(self, self.threadpool, Worker(task))
+            worker = Worker(task)
+            worker.signals.file_ready.connect(self.add_file_widget)
+            worker.fn = lambda: task(signals=worker.signals)
+            show_processing_dialog(self, self.threadpool, worker)
 
     def remove_dataframe(self, file_path):
         if file_path in self.loaded_files:

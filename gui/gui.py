@@ -9,7 +9,6 @@ from gui.panels.plotting_panel import PlottingPanel
 from src.data_processing import DataFrameWrapper
 from src.processing_utils import logger
 
-
 class FileWidget(QWidget):
     def __init__(self, file_path, delete_callback):
         super().__init__()
@@ -131,3 +130,4 @@ class PostProcessingApp(QWidget):
         self.processing_panel.remove_dataframe(file_path)
         self.plotting_panel.remove_dataframe(file_path)
         self.upload_panel.remove_dataframe(file_path)
+
