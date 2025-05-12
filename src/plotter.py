@@ -50,6 +50,7 @@ class Plotter:
                 label = ch_conf.get("label", channel)
                 color = ch_conf.get("color", None)
                 alpha = ch_conf.get("alpha", 1.0)
+                size = ch_conf.get("size", 1)
                 effective_offset = self.offset
                 if db_key == "db2" and self.convert_epoch != "none":
                     effective_offset += self.secondary_db_offset
@@ -74,12 +75,12 @@ class Plotter:
                         if self.plot_type == "line":
                             handle, = ax1.plot(x_values, y_values, label=label, color=color, alpha=alpha)
                         else:
-                            handle = ax1.scatter(x_values, y_values, s=1, label=label, color=color, alpha=alpha)
+                            handle = ax1.scatter(x_values, y_values, s=size, label=label, color=color, alpha=alpha)
                     elif ax2:
                         if self.plot_type == "line":
                             handle, = ax2.plot(x_values, y_values, label=label, color=color, alpha=alpha)
                         else:
-                            handle = ax2.scatter(x_values, y_values, s=1, label=label, color=color, alpha=alpha)
+                            handle = ax2.scatter(x_values, y_values, s=size, label=label, color=color, alpha=alpha)
                     legend_handles.append(handle)
 
         # Axis labels

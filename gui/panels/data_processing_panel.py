@@ -3,9 +3,10 @@ from PyQt6.QtWidgets import (
     QPushButton, QTextEdit, QCheckBox, QLineEdit, QFormLayout,
     QGroupBox, QFileDialog, QScrollArea, QListWidget, QRadioButton
 )
-import re
+from PyQt6.QtCore import QThreadPool, QTimer
 from src.data_processing import DataProcessor
-from src.logs import logger
+from src.processing_utils import logger, Worker, show_processing_dialog
+import re
 
 
 class DataProcessingPanel(QWidget):
@@ -13,6 +14,20 @@ class DataProcessingPanel(QWidget):
         super().__init__()
         self.dataframes = {}
         self.processors = {}
+        self.threadpool = QThreadPool()
+        self.help_map = {
+            "normalize": "Take content of each selected column and perform a min-max value normalization of them",
+            "scale": "Take content of each selected column and scale them by a factor provided in parameters box",
+            "flip_sign": "Take content of each selected columns and change the sign + into -,- into + ",
+            "sort": "Select only one column and sort the whole data by that specific column.In parameters specify if it should be ascending or descending by writing 'ascending=True/False'",
+            "drop": "Drop the data base on a selected condition",
+            "remove_negatives": "Replace all negative values with 0",
+            "remove_positives": "Replace all positive values with 0",
+            "rolling_mean": "Perform a rolling mean filter with a specified windows size in parameters",
+            "rolling_median": "Perform a rolling median filter with a specified windows size in parameters",
+            "threshold": "Replace all the values that exceed a provided value with that value",
+            "wavelet_transform": " Perform a wavelet decomposition and recomposition with specified parameters"
+        }
 
         layout = QVBoxLayout()
         layout.addWidget(QLabel("Data processing"))
@@ -42,7 +57,13 @@ class DataProcessingPanel(QWidget):
         self.operation_selector = QComboBox()
         self.operation_selector.addItems(["normalize", "scale", "flip_sign", "sort", "drop"])
         self.operation_selector.currentTextChanged.connect(self.toggle_drop_mode)
+        self.operation_selector.currentTextChanged.connect(self.update_placeholder_operations)
+        self.operation_selector.currentTextChanged.connect(self.update_operation_help)
         self.operation_param = QLineEdit()
+        self.operation_param.setEnabled(False)
+        self.operation_help = QLabel(
+            "Take content of each selected column and perform a min-max value normalization of them")
+        self.operation_help.setWordWrap(True)
         self.apply_op_button = QPushButton("Apply operation")
         self.apply_op_button.clicked.connect(self.apply_operation)
 
@@ -60,27 +81,32 @@ class DataProcessingPanel(QWidget):
         op_layout.addRow(self.drop_columns_radio)
         op_layout.addRow(self.drop_index_radio)
         op_layout.addRow(self.drop_condition_radio)
-        op_layout.addRow(QLabel("Parameters (ex. key1=val1,key2=val2):"))
         op_layout.addRow("Parameter:", self.operation_param)
         op_layout.addRow(self.apply_op_button)
+        op_layout.addRow(self.operation_help)
         self.operation_box.setLayout(op_layout)
         side_layout.addWidget(self.operation_box)
 
         # Filters
         self.filter_box = QGroupBox("Filters")
         self.filter_selector = QComboBox()
-        self.filter_selector.addItems(
-            ["remove_negatives", "remove_positives", "rolling_mean", "rolling_median", "threshold",
-             "wavelet_transform"])
+        self.filter_selector.addItems([
+            "remove_negatives", "remove_positives", "rolling_mean", "rolling_median", "threshold",
+            "wavelet_transform"])
+        self.filter_selector.currentTextChanged.connect(self.update_placeholder_filters)
+        self.filter_selector.currentTextChanged.connect(self.update_filter_help)
         self.filter_param = QLineEdit()
+        self.filter_param.setEnabled(False)
+        self.filter_help = QLabel("Replace all negative values with 0")
+        self.filter_help.setWordWrap(True)
         self.add_filter_button = QPushButton("Add filter")
         self.add_filter_button.clicked.connect(self.add_filter)
 
         filter_layout = QFormLayout()
         filter_layout.addRow("Filter:", self.filter_selector)
-        filter_layout.addRow(QLabel("Parameters (ex. key1=val1,key2=val2):"))
         filter_layout.addRow(self.filter_param)
         filter_layout.addRow(self.add_filter_button)
+        filter_layout.addRow(self.filter_help)
         self.filter_box.setLayout(filter_layout)
         side_layout.addWidget(self.filter_box)
 
@@ -115,6 +141,45 @@ class DataProcessingPanel(QWidget):
         self.drop_index_radio.setVisible(is_drop)
         self.drop_condition_radio.setVisible(is_drop)
 
+    def update_placeholder_operations(self, operation):
+        placeholders = {
+            "normalize": "factor=x",
+            "scale": "100",
+            "flip_sign": "",
+            "sort": "ascending=True/False",
+            "drop": "e.g. 100,200 or row['column'] > 0"
+        }
+        match operation:
+            case "normalize" | "flip_sign":
+                self.operation_param.setText(placeholders.get(operation, ""))
+                self.operation_param.setEnabled(False)
+            case _:
+                self.operation_param.setText(placeholders.get(operation, ""))
+                self.operation_param.setEnabled(True)
+
+    def update_placeholder_filters(self, operation):
+        placeholders = {
+            "remove_negatives": "",
+            "remove_positives": "",
+            "rolling_mean": "window=2137",
+            "rolling_median": "window=2137",
+            "threshold": "threshold=2137",
+            "wavelet_transform": "wavelet_name=coif5,level=10,threshold_mode=soft"
+        }
+        match operation:
+            case "remove_negatives" | "remove_positives":
+                self.filter_param.setText(placeholders.get(operation, ""))
+                self.filter_param.setEnabled(False)
+            case _:
+                self.filter_param.setText(placeholders.get(operation, ""))
+                self.filter_param.setEnabled(True)
+
+    def update_filter_help(self):
+        self.filter_help.setText(self.help_map.get(self.filter_selector.currentText(), ""))
+
+    def update_operation_help(self):
+        self.operation_help.setText(self.help_map.get(self.operation_selector.currentText(), ""))
+
     def add_dataframe(self, file_path, wrapper):
         self.dataframes[file_path] = wrapper
         self.processors[file_path] = DataProcessor(wrapper)
@@ -128,9 +193,6 @@ class DataProcessingPanel(QWidget):
         index = self.file_selector.findText(file_path)
         if index >= 0:
             self.file_selector.removeItem(index)
-        self.refresh()
-
-    def refresh(self):
         self.update_columns()
 
     def update_columns(self):
@@ -158,42 +220,46 @@ class DataProcessingPanel(QWidget):
         self.status_log.append(message)
 
     def apply_operation(self):
-        file_path = self.file_selector.currentText()
-        columns = self.get_selected_columns()
-        operation = self.operation_selector.currentText()
-        param = self.operation_param.text()
+        def task():
+            file_path = self.file_selector.currentText()
+            columns = self.get_selected_columns()
+            operation = self.operation_selector.currentText()
+            param = self.operation_param.text()
 
-        if not file_path or not operation:
-            self.log("Choose file and operation.")
-            return
+            if not file_path or not operation:
+                self.log("Choose file and operation.")
+                return
 
-        processor = self.processors.get(file_path)
-        try:
-            match operation:
-                case "normalize":
-                    processor.normalize_columns(columns)
-                case "scale":
-                    processor.scale_columns(columns, float(param))
-                case "flip_sign":
-                    processor.flip_column_sign(columns)
-                case "sort":
-                    processor.sort_data(columns[0], ascending=True)
-                case "drop":
-                    if self.drop_columns_radio.isChecked():
-                        processor.drop_data(columns=columns)
-                    elif self.drop_index_radio.isChecked():
-                        start_end = param.split(',')
-                        if len(start_end) == 2:
-                            start, end = int(start_end[0]), int(start_end[1])
-                            processor.drop_data(row_range=(start, end))
-                    elif self.drop_condition_radio.isChecked():
-                        try:
-                            processor.drop_data(row_condition=lambda row: eval(param))
-                        except Exception as e:
-                            self.log(f"Invalid lambda: {e}")
-            self.log(f"Applied operation: {operation} on columns: {columns}")
-        except Exception as e:
-            self.log(f"Error during operation: {e}")
+            processor = self.processors.get(file_path)
+            try:
+                match operation:
+                    case "normalize":
+                        processor.normalize_columns(columns)
+                    case "scale":
+                        processor.scale_columns(columns, float(param))
+                    case "flip_sign":
+                        processor.flip_column_sign(columns)
+                    case "sort":
+                        processor.sort_data(columns[0], ascending=True)
+                    case "drop":
+                        if self.drop_columns_radio.isChecked():
+                            processor.drop_data(columns=columns)
+                            QTimer.singleShot(200, self.update_columns)
+                        elif self.drop_index_radio.isChecked():
+                            start_end = param.split(',')
+                            if len(start_end) == 2:
+                                start, end = int(start_end[0]), int(start_end[1])
+                                processor.drop_data(row_range=(start, end))
+                        elif self.drop_condition_radio.isChecked():
+                            try:
+                                processor.drop_data(row_condition=lambda row: eval(param))
+                            except Exception as e:
+                                self.log(f"Invalid lambda: {e}")
+                self.log(f"Applied operation: {operation} on columns: {columns}")
+            except Exception as e:
+                self.log(f"Error during operation: {e}")
+
+        show_processing_dialog(self, self.threadpool, Worker(task))
 
     def add_filter(self):
         file_path = self.file_selector.currentText()
@@ -209,7 +275,7 @@ class DataProcessingPanel(QWidget):
                 value = params[k]
                 if number_pattern.fullmatch(value):
                     if k == "level":
-                        params[k] = int(float(value))  # level must be int
+                        params[k] = int(value)
                     else:
                         params[k] = float(value)
                 else:
@@ -221,13 +287,13 @@ class DataProcessingPanel(QWidget):
             self.log(f"Error adding filter: {e}")
 
     def apply_filters(self):
-        file_path = self.file_selector.currentText()
-        processor = self.processors.get(file_path)
-        try:
+        def task():
+            file_path = self.file_selector.currentText()
+            processor = self.processors.get(file_path)
             processor.queue_filters()
             self.log("Applied all queued filters")
-        except Exception as e:
-            self.log(f"Error during filter application: {e}")
+
+        show_processing_dialog(self, self.threadpool, Worker(task))
 
     def save_to_file(self):
         file_path = self.file_selector.currentText()
@@ -235,5 +301,8 @@ class DataProcessingPanel(QWidget):
         if processor:
             save_path, _ = QFileDialog.getSaveFileName(self, "Save as", filter="CSV Files (*.csv)")
             if save_path:
-                processor.save_data(save_path)
-                self.log(f"Data saved to: {save_path}")
+                def task():
+                    processor.save_data(save_path)
+                    self.log(f"Data saved to: {save_path}")
+
+                show_processing_dialog(self, self.threadpool, Worker(task))
