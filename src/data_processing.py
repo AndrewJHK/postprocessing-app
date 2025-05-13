@@ -1,4 +1,9 @@
 import dask.dataframe as dd
+import numpy as np
+import pandas as pd
+from scipy.spatial.transform import Rotation
+from ahrs.filters import EKF
+from ahrs.common.orientation import acc2q
 from src.filters import DataFilter
 
 EQUATIONS = {"biliq": "placeholder", "broom_stick": "placeholder"}
@@ -146,6 +151,99 @@ class DataProcessor:
             self.df[column] = -self.df[column]
 
         self.df_wrapper.update_dataframe(self.df)
+
+    @sync_with_wrapper
+    def interpolate_index(self):
+        df_pd = self.df.compute()
+        df_pd = df_pd.reindex(range(df_pd.index.min(), df_pd.index.max() + 1), fill_value=pd.NA)
+        df_pd.interpolate(inplace=True)
+        self.df = dd.from_pandas(df_pd, npartitions=1)
+
+    @sync_with_wrapper
+    def compute_orientation(self):
+        df_pd = self.df.compute()
+        acc = df_pd[["data.acc_data.x", "data.acc_data.y", "data.acc_data.z"]].to_numpy()
+        gyro = df_pd[["data.telemetry.quaternion.roll", "data.telemetry.quaternion.pitch",
+                      "data.telemetry.quaternion.heading"]].to_numpy()
+
+        acc[:, 0] -= np.mean(acc[:20, 0])
+        acc[:, 1] -= np.mean(acc[:20, 2])
+        gyro -= np.mean(gyro[:20], axis=0)
+
+        ekf = EKF(
+            gyr=gyro,
+            acc=acc,
+            q0=acc2q(acc[0, :]),
+            dt=0.01,
+            var_gyr=0.1 ** 2,
+            var_acc=0.3 ** 2,
+            frame="ENU",
+        )
+
+        df_pd["data.telemetry.quaternion.q0"] = ekf.Q[:, 1]
+        df_pd["data.telemetry.quaternion.q1"] = ekf.Q[:, 2]
+        df_pd["data.telemetry.quaternion.q2"] = ekf.Q[:, 3]
+        df_pd["data.telemetry.quaternion.q3"] = ekf.Q[:, 0]
+
+        self.df = dd.from_pandas(df_pd, npartitions=1)
+
+    @sync_with_wrapper
+    def compute_position_from_orientation(self):
+        df_pd = self.df.compute()
+        acc = df_pd[["data.telemetry.acc_data.x", "data.telemetry.acc_data.y", "data.telemetry.acc_data.z"]].to_numpy()
+        orient = df_pd[["data.telemetry.quaternion.q0", "data.telemetry.quaternion.q1", "data.telemetry.quaternion.q2",
+                        "data.telemetry.quaternion.q3"]].to_numpy()
+
+        acc[:, 0] -= np.mean(acc[:20, 0])
+        acc[:, 1] -= np.mean(acc[:20, 2])
+
+        acc_global = np.zeros_like(acc)
+        for i in range(len(acc_global)):
+            rot = Rotation.from_quat(orient[i, :])
+            acc_global[i, :] = rot.apply(acc[i, :])
+
+        x_acc, y_acc, z_acc = acc_global.T
+        z_acc_offset = np.mean(z_acc[:20])
+        z_acc -= z_acc_offset
+
+        accel_coef = 9.81 / z_acc_offset
+        x_acc *= accel_coef
+        y_acc *= accel_coef
+        z_acc *= accel_coef
+
+        x_vel = np.cumsum(x_acc) * 0.01
+        y_vel = np.cumsum(y_acc) * 0.01
+        z_vel = np.cumsum(z_acc) * 0.01
+
+        x_pos = np.cumsum(x_vel) * 0.01
+        y_pos = np.cumsum(y_vel) * 0.01
+        z_pos = np.cumsum(z_vel) * 0.01
+
+        df_pd["Computed_Acc_X"] = x_acc
+        df_pd["Computed_Acc_Y"] = y_acc
+        df_pd["Computed_Acc_Z"] = z_acc
+        df_pd["Computed_Vel_X"] = x_vel
+        df_pd["Computed_Vel_Y"] = y_vel
+        df_pd["Computed_Vel_Z"] = z_vel
+        df_pd["Computed_Pos_X"] = x_pos
+        df_pd["Computed_Pos_Y"] = y_pos
+        df_pd["Computed_Pos_Z"] = z_pos
+
+        self.df = dd.from_pandas(df_pd, npartitions=1)
+
+    @sync_with_wrapper
+    def compute_flight_profile(self):
+        columns_to_keep = ["header.timestamp_epoch","data.telemetry.acc_data.x", "data.telemetry.acc_data.y", "data.telemetry.acc_data.z",
+                           "data.telemetry.quaternion.roll", "data.telemetry.quaternion.pitch",
+                           "data.telemetry.quaternion.heading"
+                           "data.telemetry.quaternion.q0", "data.telemetry.quaternion.q1",
+                           "data.telemetry.quaternion.q2",
+                           "data.telemetry.quaternion.q3"]
+        columns_to_drop = [col for col in self.df.columns if col not in columns_to_keep]
+        self.drop_data(columns=columns_to_drop)
+        self.interpolate_index()
+        self.compute_orientation()
+        self.compute_position_from_orientation()
 
     def get_processed_data(self):
         """Returns the processed DataFrame."""
