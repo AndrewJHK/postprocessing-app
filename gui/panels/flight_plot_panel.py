@@ -5,6 +5,7 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import QThreadPool
 from src.processing_utils import Worker, show_processing_dialog
 from src.data_processing import DataProcessor
+from src.plotter import Plotter
 
 
 class FlightPlotPanel(QWidget):
@@ -14,6 +15,8 @@ class FlightPlotPanel(QWidget):
         self.threadpool = QThreadPool()
         self.processors = {}
         self.last_selected_file = None
+        self.max_alt = 0
+        self.max_speed = 0
 
         layout = QVBoxLayout()
 
@@ -41,7 +44,9 @@ class FlightPlotPanel(QWidget):
 
         plot_buttons_layout = QHBoxLayout()
         self.plot_orientation_button = QPushButton("Plot orientation animation")
+        self.plot_orientation_button.connect(self.plot_orientation)
         self.plot_velocity_button = QPushButton("Plot velocity/acceleration")
+        self.plot_velocity_button.connect(self.plot_velocity)
         plot_buttons_layout.addWidget(self.plot_orientation_button)
         plot_buttons_layout.addWidget(self.plot_velocity_button)
         layout.addLayout(plot_buttons_layout)
@@ -92,6 +97,45 @@ class FlightPlotPanel(QWidget):
         self.max_speed_field.setText(f"{self.max_speed:.2f}")
         self.log(f"Apogee: {self.max_alt:.2f} m")
         self.log(f"Max speed: {self.max_speed:.2f} m/s")
+
+    def plot_orientation(self):
+        file_path = self.last_selected_file
+        if not file_path:
+            return
+
+        processor = self.processors[file_path]
+        df = processor.get_processed_data().compute()
+        save = self.save_plot_checkbox.isChecked()
+
+        try:
+            plotter = Plotter({}, {}, plots_folder_path="plots")
+            orientation = df[
+                ["data.telemetry.quaternion.q0", "data.telemetry.quaternion.q1", "data.telemetry.quaternion.q2",
+                 "data.telemetry.quaternion.q3"]].to_numpy()
+            plotter.flight_plot_orientation(save, orientation)
+            self.log("Orientation plot finished.")
+        except Exception as e:
+            self.log(f"Plotting error: {e}")
+
+    def plot_velocity(self):
+        file_path = self.last_selected_file
+        if not file_path:
+            return
+
+        processor = self.processors[file_path]
+        df = processor.get_processed_data().compute()
+        save = self.save_plot_checkbox.isChecked()
+
+        try:
+            plotter = Plotter({}, {}, plots_folder_path="plots")
+            data = df[
+                ["Computed_Acc_X", "Computed_Acc_Y", "Computed_Acc_Z", "Computed_Vel_X", "Computed_Vel_Y",
+                 "Computed_Vel_Z", "Computed_Pos_X",
+                 "Computed_Pos_Y", "Computed_Pos_Z"]].to_numpy()
+            plotter.flight_plot_velocity(save, data)
+            self.log("Velocity plot finished.")
+        except Exception as e:
+            self.log(f"Plotting error: {e}")
 
     def save_to_file(self):
         file_path = self.last_selected_file

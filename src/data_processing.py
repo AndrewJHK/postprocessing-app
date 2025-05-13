@@ -150,7 +150,10 @@ class DataProcessor:
         for column in columns:
             self.df[column] = -self.df[column]
 
-        self.df_wrapper.update_dataframe(self.df)
+    @sync_with_wrapper
+    def absolute(self, columns):
+        for column in columns:
+            self.df[column] = abs(self.df[column])
 
     @sync_with_wrapper
     def interpolate_index(self):
@@ -233,7 +236,8 @@ class DataProcessor:
 
     @sync_with_wrapper
     def compute_flight_profile(self):
-        columns_to_keep = ["header.timestamp_epoch","data.telemetry.acc_data.x", "data.telemetry.acc_data.y", "data.telemetry.acc_data.z",
+        columns_to_keep = ["header.timestamp_epoch", "data.telemetry.acc_data.x", "data.telemetry.acc_data.y",
+                           "data.telemetry.acc_data.z",
                            "data.telemetry.quaternion.roll", "data.telemetry.quaternion.pitch",
                            "data.telemetry.quaternion.heading"
                            "data.telemetry.quaternion.q0", "data.telemetry.quaternion.q1",

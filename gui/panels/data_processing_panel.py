@@ -19,8 +19,9 @@ class DataProcessingPanel(QWidget):
             "normalize": "Take content of each selected column and perform a min-max value normalization of them",
             "scale": "Take content of each selected column and scale them by a factor provided in parameters box",
             "flip_sign": "Take content of each selected columns and change the sign + into -,- into + ",
+            "absolute": "Replace all data with absolute values",
             "sort": "Select only one column and sort the whole data by that specific column.In parameters specify if it should be ascending or descending by writing 'ascending=True/False'",
-            "drop": "Drop the data base on a selected condition",
+            "drop": "Drop the data, based on a selected condition",
             "remove_negatives": "Replace all negative values with 0",
             "remove_positives": "Replace all positive values with 0",
             "rolling_mean": "Perform a rolling mean filter with a specified windows size in parameters",
@@ -55,7 +56,7 @@ class DataProcessingPanel(QWidget):
         # Operations
         self.operation_box = QGroupBox("Operations")
         self.operation_selector = QComboBox()
-        self.operation_selector.addItems(["normalize", "scale", "flip_sign", "sort", "drop"])
+        self.operation_selector.addItems(["normalize", "scale", "flip_sign", "absolute", "sort", "drop"])
         self.operation_selector.currentTextChanged.connect(self.toggle_drop_mode)
         self.operation_selector.currentTextChanged.connect(self.update_placeholder_operations)
         self.operation_selector.currentTextChanged.connect(self.update_operation_help)
@@ -146,11 +147,12 @@ class DataProcessingPanel(QWidget):
             "normalize": "factor=x",
             "scale": "100",
             "flip_sign": "",
+            "absolute": "",
             "sort": "ascending=True/False",
             "drop": "e.g. 100,200 or row['column'] > 0"
         }
         match operation:
-            case "normalize" | "flip_sign":
+            case "normalize" | "flip_sign" | "absolute":
                 self.operation_param.setText(placeholders.get(operation, ""))
                 self.operation_param.setEnabled(False)
             case _:
@@ -239,6 +241,8 @@ class DataProcessingPanel(QWidget):
                         processor.scale_columns(columns, float(param))
                     case "flip_sign":
                         processor.flip_column_sign(columns)
+                    case "absolute":
+                        processor.absolute(columns)
                     case "sort":
                         processor.sort_data(columns[0], ascending=True)
                     case "drop":
