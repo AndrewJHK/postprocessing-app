@@ -62,31 +62,39 @@ class UploadPanel(QWidget):
         self.interpolated = self.interpolated_radio.isChecked()
         logger.info(f"JSON conversion mode: {'Interpolated' if self.interpolated else 'None filled'}")
 
-    def log(self, message):
-        logger.info(message)
+    def log(self, message, log_type):
+        match log_type:
+            case "DEBUG":
+                logger.debug(message)
+            case "INFO":
+                logger.info(message)
+            case "ERROR":
+                logger.error(message)
         self.status_log.append(message)
 
     def load_csv(self):
         files, _ = QFileDialog.getOpenFileNames(self, "Choose CSV files", filter="CSV Files (*.csv)")
         if not files:
             return
-
         for file_path in files:
-            def task(path=file_path, signals=None):
-                if path and path not in self.loaded_files:
-                    wrapper = DataFrameWrapper(path)
-                    self.loaded_files.append(path)
-                    self.file_list.addItem(path)
-                    if self.add_callback:
-                        self.add_callback(path, wrapper)
-                    if signals:
-                        signals.file_ready.emit(path)
-                    self.log(f"Loaded CSV file: {path}")
+            try:
+                def task(path=file_path, signals=None):
+                    if path and path not in self.loaded_files:
+                        wrapper = DataFrameWrapper(path)
+                        self.loaded_files.append(path)
+                        self.file_list.addItem(path)
+                        if self.add_callback:
+                            self.add_callback(path, wrapper)
+                        if signals:
+                            signals.file_ready.emit(path)
+                        self.log(f"Loaded CSV file: {path}", "INFO")
 
-            worker = Worker(task)
-            worker.signals.file_ready.connect(self.add_file_widget)
-            worker.fn = lambda: task(signals=worker.signals)
-            show_processing_dialog(self, self.threadpool, worker)
+                worker = Worker(task)
+                worker.signals.file_ready.connect(self.add_file_widget)
+                worker.fn = lambda: task(signals=worker.signals)
+                show_processing_dialog(self, self.threadpool, worker)
+            except Exception as e:
+                self.log(f"Error while loading CSV:{file_path}: {e}", "ERROR")
 
     def remove_dataframe(self, file_path):
         if file_path in self.loaded_files:
@@ -97,7 +105,7 @@ class UploadPanel(QWidget):
                     self.file_list.takeItem(i)
                     break
 
-            self.log(f"File removed: {file_path}")
+            self.log(f"File removed: {file_path}", "INFO")
 
     def load_json(self):
         files, _ = QFileDialog.getOpenFileNames(self, "Choose JSON files", filter="JSON Files (*.json)")
@@ -115,8 +123,8 @@ class UploadPanel(QWidget):
                         for path in generated_paths:
                             if self.add_file_widget:
                                 self.add_file_widget(path)
-                        self.log(f"Converted JSON to CSVs: {base_path}")
+                        self.log(f"Converted JSON to CSVs: {base_path}", "INFO")
                 except Exception as e:
-                    self.log(f"JSON conversion error: {e}")
+                    self.log(f"JSON conversion error: {e}", "ERROR")
 
         show_processing_dialog(self, self.threadpool, Worker(task))

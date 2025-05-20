@@ -217,8 +217,14 @@ class DataProcessingPanel(QWidget):
                 for i in range(self.column_layout.count())
                 if self.column_layout.itemAt(i).widget().isChecked()]
 
-    def log(self, message):
-        logger.info(message)
+    def log(self, message, log_type):
+        match log_type:
+            case "DEBUG":
+                logger.debug(message)
+            case "INFO":
+                logger.info(message)
+            case "ERROR":
+                logger.error(message)
         self.status_log.append(message)
 
     def apply_operation(self):
@@ -229,7 +235,7 @@ class DataProcessingPanel(QWidget):
             param = self.operation_param.text()
 
             if not file_path or not operation:
-                self.log("Choose file and operation.")
+                self.log("Choose file and operation.", "INFO")
                 return
 
             processor = self.processors.get(file_path)
@@ -258,10 +264,10 @@ class DataProcessingPanel(QWidget):
                             try:
                                 processor.drop_data(row_condition=lambda row: eval(param))
                             except Exception as e:
-                                self.log(f"Invalid lambda: {e}")
-                self.log(f"Applied operation: {operation} on columns: {columns}")
+                                self.log(f"Invalid lambda: {e}", "ERROR")
+                self.log(f"Applied operation: {operation} on columns: {columns}", "INFO")
             except Exception as e:
-                self.log(f"Error during operation: {e}")
+                self.log(f"Error during operation: {e}", "ERROR")
 
         show_processing_dialog(self, self.threadpool, Worker(task))
 
@@ -286,18 +292,21 @@ class DataProcessingPanel(QWidget):
                     params[k] = value
             processor.add_filter(columns, filter_type, **params)
             self.queue_list.addItem(f"{filter_type} on {columns} with {params}")
-            self.log(f"Added filter {filter_type} for {columns}")
+            self.log(f"Added filter {filter_type} for {columns}", "INFO")
         except Exception as e:
-            self.log(f"Error adding filter: {e}")
+            self.log(f"Error adding filter: {e}", "ERROR")
 
     def apply_filters(self):
-        def task():
-            file_path = self.file_selector.currentText()
-            processor = self.processors.get(file_path)
-            processor.queue_filters()
-            self.log("Applied all queued filters")
+        try:
+            def task():
+                file_path = self.file_selector.currentText()
+                processor = self.processors.get(file_path)
+                processor.queue_filters()
+                self.log("Applied all queued filters", "INFO")
 
-        show_processing_dialog(self, self.threadpool, Worker(task))
+            show_processing_dialog(self, self.threadpool, Worker(task))
+        except Exception as e:
+            self.log(f"Error during filter aplication:{e}", "ERROR")
 
     def save_to_file(self):
         file_path = self.file_selector.currentText()
@@ -305,8 +314,10 @@ class DataProcessingPanel(QWidget):
         if processor:
             save_path, _ = QFileDialog.getSaveFileName(self, "Save as", filter="CSV Files (*.csv)")
             if save_path:
-                def task():
-                    processor.save_data(save_path)
-                    self.log(f"Data saved to: {save_path}")
-
-                show_processing_dialog(self, self.threadpool, Worker(task))
+                try:
+                    def task():
+                        processor.save_data(save_path)
+                        self.log(f"Data saved to: {save_path}", "INFO")
+                        show_processing_dialog(self, self.threadpool, Worker(task))
+                except Exception as e:
+                    self.log(f"Error during saving data: {e}", "ERROR")

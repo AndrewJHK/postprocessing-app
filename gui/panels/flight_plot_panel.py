@@ -3,7 +3,7 @@ from PyQt6.QtWidgets import (
     QComboBox, QTextEdit, QFileDialog, QHBoxLayout, QFormLayout, QLineEdit, QCheckBox
 )
 from PyQt6.QtCore import QThreadPool
-from src.processing_utils import Worker, show_processing_dialog
+from src.processing_utils import Worker, show_processing_dialog, logger
 from src.data_processing import DataProcessor
 from src.plotter import Plotter
 
@@ -70,7 +70,14 @@ class FlightPlotPanel(QWidget):
     def _update_selection(self, file_path):
         self.last_selected_file = file_path
 
-    def log(self, message):
+    def log(self, message, log_type):
+        match log_type:
+            case "DEBUG":
+                logger.debug(message)
+            case "INFO":
+                logger.info(message)
+            case "ERROR":
+                logger.error(message)
         self.status_log.append(message)
 
     def perform_calculations(self):
@@ -79,24 +86,27 @@ class FlightPlotPanel(QWidget):
             return
 
         processor = self.processors[file_path]
+        try:
 
-        def task():
-            self.log("Starting flight profile computation...")
-            processor.compute_flight_profile()
-            df = processor.get_processed_data().compute()
-            self.max_alt = df["Computed_Pos_Z"].max()
-            self.max_speed = df["Computed_Vel_Z"].max()
-            self.log("Computation finished.")
+            def task():
+                self.log("Starting flight profile computation...", "INFO")
+                processor.compute_flight_profile()
+                df = processor.get_processed_data().compute()
+                self.max_alt = df["Computed_Pos_Z"].max()
+                self.max_speed = df["Computed_Vel_Z"].max()
+                self.log("Computation finished.", "INFO")
 
-        worker = Worker(task)
-        worker.signals.finished.connect(self._update_results)
-        show_processing_dialog(self, self.threadpool, worker)
+            worker = Worker(task)
+            worker.signals.finished.connect(self._update_results)
+            show_processing_dialog(self, self.threadpool, worker)
+        except Exception as e:
+            self.log(f"Calculation error: {e}", "ERROR")
 
     def _update_results(self):
         self.apogee_field.setText(f"{self.max_alt:.2f}")
         self.max_speed_field.setText(f"{self.max_speed:.2f}")
-        self.log(f"Apogee: {self.max_alt:.2f} m")
-        self.log(f"Max speed: {self.max_speed:.2f} m/s")
+        self.log(f"Apogee: {self.max_alt:.2f} m", "INFO")
+        self.log(f"Max speed: {self.max_speed:.2f} m/s", "INFO")
 
     def plot_orientation(self):
         file_path = self.last_selected_file
@@ -109,15 +119,16 @@ class FlightPlotPanel(QWidget):
 
         try:
             self.log(
-                "Starting, orientation plot. This might take a while, app might get frozen for a bit if you decide to save the animation")
+                "Starting, orientation plot. This might take a while, app might get frozen for a bit if you decide to save the animation",
+                "INFO")
             plotter = Plotter()
             orientation = df[
                 ["data.telemetry.quaternion.q0", "data.telemetry.quaternion.q1", "data.telemetry.quaternion.q2",
                  "data.telemetry.quaternion.q3"]].to_numpy()
             plotter.flight_plot_orientation(save, orientation)
-            self.log("Orientation plot finished.")
+            self.log("Orientation plot finished.", "INFO")
         except Exception as e:
-            self.log(f"Plotting error: {e}")
+            self.log(f"Plotting error: {e}", "ERROR")
 
     def plot_velocity(self):
         file_path = self.last_selected_file
@@ -129,16 +140,16 @@ class FlightPlotPanel(QWidget):
         save = self.save_plot_checkbox.isChecked()
 
         try:
-            self.log("Starting, velocity and position plot")
+            self.log("Starting, velocity and position plot", "INFO")
             plotter = Plotter()
             data = df[
                 ["Computed_Acc_X", "Computed_Acc_Y", "Computed_Acc_Z", "Computed_Vel_X", "Computed_Vel_Y",
                  "Computed_Vel_Z", "Computed_Pos_X",
                  "Computed_Pos_Y", "Computed_Pos_Z"]].to_numpy()
             plotter.flight_plot_velocity(save, data)
-            self.log("Velocity plot finished.")
+            self.log("Velocity plot finished.", "INFO")
         except Exception as e:
-            self.log(f"Plotting error: {e}")
+            self.log(f"Plotting error: {e}", "ERROR")
 
     def save_to_file(self):
         file_path = self.last_selected_file
@@ -150,6 +161,6 @@ class FlightPlotPanel(QWidget):
         if save_path:
             def task():
                 processor.save_data(save_path)
-                self.log(f"Data saved to: {save_path}")
+                self.log(f"Data saved to: {save_path}", "INFO")
 
             show_processing_dialog(self, self.threadpool, Worker(task))
