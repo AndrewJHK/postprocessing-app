@@ -351,7 +351,7 @@ class PlottingPanel(QWidget):
                             "alpha": float(fields[1].text()) if fields[1].text() else 1.0,
                             "y_axis": y_axis_combo.currentText(),
                             "x_column": x_axis_combo.currentText(),
-                            "size": int(fields[3].text()) if fields[3].text() else 1
+                            "size": int(fields[2].text()) if fields[2].text() else 1
                         }
             if db_config["channels"]:
                 config["databases"][db_key] = db_config
