@@ -103,6 +103,8 @@ class PostProcessingApp(QWidget):
             self.active_button.setChecked(False)
         button.setChecked(True)
         self.active_button = button
+        if index == 2:
+            self.processing_panel.update_columns()
 
     def add_dataframe(self, file_path, wrapper: DataFrameWrapper):
         self.dataframes[file_path] = wrapper

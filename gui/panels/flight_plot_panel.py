@@ -44,9 +44,9 @@ class FlightPlotPanel(QWidget):
 
         plot_buttons_layout = QHBoxLayout()
         self.plot_orientation_button = QPushButton("Plot orientation animation")
-        self.plot_orientation_button.connect(self.plot_orientation)
+        self.plot_orientation_button.clicked.connect(self.plot_orientation)
         self.plot_velocity_button = QPushButton("Plot velocity/acceleration")
-        self.plot_velocity_button.connect(self.plot_velocity)
+        self.plot_velocity_button.clicked.connect(self.plot_velocity)
         plot_buttons_layout.addWidget(self.plot_orientation_button)
         plot_buttons_layout.addWidget(self.plot_velocity_button)
         layout.addLayout(plot_buttons_layout)
@@ -84,8 +84,8 @@ class FlightPlotPanel(QWidget):
             self.log("Starting flight profile computation...")
             processor.compute_flight_profile()
             df = processor.get_processed_data().compute()
-            self.max_alt = df["z"].max()
-            self.max_speed = df[["vx", "vy", "vz"]].pow(2).sum(axis=1).pow(0.5).max()
+            self.max_alt = df["Computed_Pos_Z"].max()
+            self.max_speed = df["Computed_Vel_Z"].max()
             self.log("Computation finished.")
 
         worker = Worker(task)
@@ -108,7 +108,9 @@ class FlightPlotPanel(QWidget):
         save = self.save_plot_checkbox.isChecked()
 
         try:
-            plotter = Plotter({}, {}, plots_folder_path="plots")
+            self.log(
+                "Starting, orientation plot. This might take a while, app might get frozen for a bit if you decide to save the animation")
+            plotter = Plotter()
             orientation = df[
                 ["data.telemetry.quaternion.q0", "data.telemetry.quaternion.q1", "data.telemetry.quaternion.q2",
                  "data.telemetry.quaternion.q3"]].to_numpy()
@@ -127,7 +129,8 @@ class FlightPlotPanel(QWidget):
         save = self.save_plot_checkbox.isChecked()
 
         try:
-            plotter = Plotter({}, {}, plots_folder_path="plots")
+            self.log("Starting, velocity and position plot")
+            plotter = Plotter()
             data = df[
                 ["Computed_Acc_X", "Computed_Acc_Y", "Computed_Acc_Z", "Computed_Vel_X", "Computed_Vel_Y",
                  "Computed_Vel_Z", "Computed_Pos_X",

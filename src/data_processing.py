@@ -32,6 +32,9 @@ class DataFrameWrapper:
     def update_dataframe(self, dataframe):
         self.df = dataframe
 
+    def get_raw_pandas(self):
+        return pd.read_csv(self.csv_path, parse_dates=["header.timestamp_epoch"], index_col="header.counter")
+
 
 class DataProcessor:
     def __init__(self, df_wrapper):
@@ -155,23 +158,29 @@ class DataProcessor:
         for column in columns:
             self.df[column] = abs(self.df[column])
 
-    @sync_with_wrapper
     def interpolate_index(self):
-        df_pd = self.df.compute()
+        df_pd = self.df_wrapper.get_raw_pandas()
+        df_pd = df_pd.copy()
+        df_pd["Time"] = (df_pd["header.timestamp_epoch"] - pd.Timestamp("1970-01-01")) // pd.Timedelta("10ms")
+        df_pd["Time"] = df_pd["Time"] - df_pd["Time"].iloc[0]
+        df_pd.set_index("Time", inplace=True)
         df_pd = df_pd.reindex(range(df_pd.index.min(), df_pd.index.max() + 1), fill_value=pd.NA)
         df_pd.interpolate(inplace=True)
         self.df = dd.from_pandas(df_pd, npartitions=1)
 
-    @sync_with_wrapper
     def compute_orientation(self):
         df_pd = self.df.compute()
-        acc = df_pd[["data.acc_data.x", "data.acc_data.y", "data.acc_data.z"]].to_numpy()
+        df_pd = df_pd.copy()
+        acc = df_pd[["data.telemetry.acc_data.x", "data.telemetry.acc_data.y", "data.telemetry.acc_data.z"]].to_numpy()
         gyro = df_pd[["data.telemetry.quaternion.roll", "data.telemetry.quaternion.pitch",
                       "data.telemetry.quaternion.heading"]].to_numpy()
 
         acc[:, 0] -= np.mean(acc[:20, 0])
         acc[:, 1] -= np.mean(acc[:20, 2])
-        gyro -= np.mean(gyro[:20], axis=0)
+
+        gyro[:, 0] -= np.mean(gyro[:20, 0])
+        gyro[:, 1] -= np.mean(gyro[:20, 1])
+        gyro[:, 2] -= np.mean(gyro[:20, 2])
 
         ekf = EKF(
             gyr=gyro,
@@ -190,9 +199,9 @@ class DataProcessor:
 
         self.df = dd.from_pandas(df_pd, npartitions=1)
 
-    @sync_with_wrapper
     def compute_position_from_orientation(self):
         df_pd = self.df.compute()
+        df_pd = df_pd.copy()
         acc = df_pd[["data.telemetry.acc_data.x", "data.telemetry.acc_data.y", "data.telemetry.acc_data.z"]].to_numpy()
         orient = df_pd[["data.telemetry.quaternion.q0", "data.telemetry.quaternion.q1", "data.telemetry.quaternion.q2",
                         "data.telemetry.quaternion.q3"]].to_numpy()

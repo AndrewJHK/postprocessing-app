@@ -7,25 +7,26 @@ from scipy.spatial.transform import Rotation
 
 
 class Plotter:
-    def __init__(self, config_dict, dataframe_map, plots_folder_path):
+    def __init__(self, config_dict=None, dataframe_map=None, plots_folder_path="plots"):
         self.config = config_dict
-        self.dataframes = dataframe_map  # mapping: {"db1": DataFrameWrapper, ...}
-        self.plot_name = config_dict["plot_settings"].get("title", "Plot")
-        self.plot_type = config_dict["plot_settings"].get("type", "line")
-        self.precise_grid = config_dict["plot_settings"].get("precise_grid", False)
-        self.convert_epoch = config_dict["plot_settings"].get("convert_epoch", None)
+        if config_dict and dataframe_map is not None:
+            self.dataframes = dataframe_map  # mapping: {"db1": DataFrameWrapper, ...}
+            self.plot_name = config_dict["plot_settings"].get("title", "Plot")
+            self.plot_type = config_dict["plot_settings"].get("type", "line")
+            self.precise_grid = config_dict["plot_settings"].get("precise_grid", False)
+            self.convert_epoch = config_dict["plot_settings"].get("convert_epoch", None)
+            self.offset = config_dict["plot_settings"].get("offset", 0)
+            self.secondary_db_offset = config_dict["plot_settings"].get("secondary_db_offset", 0)
+            self.axis_labels = {
+                "x": config_dict["plot_settings"].get("x_axis_label", "X-Axis"),
+                "y1": config_dict["plot_settings"].get("y_axis_labels", {}).get("y1", "Y1-Axis"),
+                "y2": config_dict["plot_settings"].get("y_axis_labels", {}).get("y2", "Y2-Axis")
+            }
+
+            self.horizontal_lines = config_dict["plot_settings"].get("horizontal_lines", {})
+            self.vertical_lines = config_dict["plot_settings"].get("vertical_lines", {})
         self.plots_folder_path = plots_folder_path
-        self.offset = config_dict["plot_settings"].get("offset", 0)
-        self.secondary_db_offset = config_dict["plot_settings"].get("secondary_db_offset", 0)
-        self.axis_labels = {
-            "x": config_dict["plot_settings"].get("x_axis_label", "X-Axis"),
-            "y1": config_dict["plot_settings"].get("y_axis_labels", {}).get("y1", "Y1-Axis"),
-            "y2": config_dict["plot_settings"].get("y_axis_labels", {}).get("y2", "Y2-Axis")
-        }
-
-        self.horizontal_lines = config_dict["plot_settings"].get("horizontal_lines", {})
-        self.vertical_lines = config_dict["plot_settings"].get("vertical_lines", {})
-
+        self.anim = None
         os.makedirs(self.plots_folder_path, exist_ok=True)
 
     def plot(self):
@@ -149,14 +150,14 @@ class Plotter:
         ax_gyro.plot(t, orientation[:, 2], label="z")
         ax_gyro.set_title("Rocket Rotation")
         ax_gyro.set_xlabel("Time [s]")
-        ax_gyro.set_ylabel("Value")
+        ax_gyro.set_ylabel("Angular velocity [rad/s]")
         ax_gyro.grid()
         ax_gyro.legend()
 
         fig_orient = plot.figure()
         ax_orient = fig_orient.add_subplot(projection="3d")
 
-        anim = FuncAnimation(
+        self.anim = FuncAnimation(
             fig_orient,
             func=self.animate_orientation,
             fargs=(ax_orient, orientation),
@@ -167,7 +168,7 @@ class Plotter:
 
         if save:
             fig_gyro.savefig("plots/gyro.png")
-            anim.save("plots/orientation.mp4", writer="ffmpeg")
+            self.anim.save("plots/orientation.mp4", writer="ffmpeg")
 
         plot.show()
 
