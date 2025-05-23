@@ -292,8 +292,8 @@ class PlottingPanel(QWidget):
         form.addRow("Color:", color_input)
         form.addRow("Transparency:", transparency_input)
         form.addRow("Y Axis:", y_axis_input)
-        form.addRow("X Column:", x_column_input)
-        form.addRow("Dot size:", size_input)
+        form.addRow("X Axis:", x_column_input)
+        form.addRow("Dot Size:", size_input)
         form.addRow(remove_button)
 
         container.setLayout(form)

@@ -87,7 +87,11 @@ After conversion of JSON file you still need to load them as csv files.
 
 ### Flight Plot
 
-Work in progress
+Choose a csv file that contains required data columns - header.timestamp_epoch, data.telemetry.acc_data.\*,
+data.telemetry.quaternion.\*
+Simply click compute button and wait for the results - computed apogee, max speed and plots. Currently, the animation for
+rotation is not working so its disabled and waiting for fix.
+If you want to save the computed data remember to click the save to file button.
 
 ### Data Processing
 
@@ -141,7 +145,7 @@ scaled Y axes and combining a plot from two different databases. The X axis can 
 to timestamp_epoch, on top of that it can be automatically converted to seconds and milliseconds, as well shift the
 graph in time by providing the offset in milliseconds in the specified box. Negative values shift the graph to the left
 and positive to the right.
-On the bottom you can enter horizontal and vertical dotted lines. 
+On the bottom you can enter horizontal and vertical dotted lines.
 
 ### Deactivating the Virtual Environment
 

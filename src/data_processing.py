@@ -192,10 +192,10 @@ class DataProcessor:
             frame="ENU",
         )
 
-        df_pd["data.telemetry.quaternion.q0"] = ekf.Q[:, 1]
-        df_pd["data.telemetry.quaternion.q1"] = ekf.Q[:, 2]
-        df_pd["data.telemetry.quaternion.q2"] = ekf.Q[:, 3]
-        df_pd["data.telemetry.quaternion.q3"] = ekf.Q[:, 0]
+        df_pd["data.telemetry.quaternion.q0_computed"] = ekf.Q[:, 1]
+        df_pd["data.telemetry.quaternion.q1_computed"] = ekf.Q[:, 2]
+        df_pd["data.telemetry.quaternion.q2_computed"] = ekf.Q[:, 3]
+        df_pd["data.telemetry.quaternion.q3_computed"] = ekf.Q[:, 0]
 
         self.df = dd.from_pandas(df_pd, npartitions=1)
 
@@ -203,8 +203,8 @@ class DataProcessor:
         df_pd = self.df.compute()
         df_pd = df_pd.copy()
         acc = df_pd[["data.telemetry.acc_data.x", "data.telemetry.acc_data.y", "data.telemetry.acc_data.z"]].to_numpy()
-        orient = df_pd[["data.telemetry.quaternion.q0", "data.telemetry.quaternion.q1", "data.telemetry.quaternion.q2",
-                        "data.telemetry.quaternion.q3"]].to_numpy()
+        orient = df_pd[["data.telemetry.quaternion.q0_computed", "data.telemetry.quaternion.q1_computed", "data.telemetry.quaternion.q2_computed",
+                        "data.telemetry.quaternion.q3_computed"]].to_numpy()
 
         acc[:, 0] -= np.mean(acc[:20, 0])
         acc[:, 1] -= np.mean(acc[:20, 2])
@@ -248,7 +248,7 @@ class DataProcessor:
         columns_to_keep = ["header.timestamp_epoch", "data.telemetry.acc_data.x", "data.telemetry.acc_data.y",
                            "data.telemetry.acc_data.z",
                            "data.telemetry.quaternion.roll", "data.telemetry.quaternion.pitch",
-                           "data.telemetry.quaternion.heading"
+                           "data.telemetry.quaternion.heading",
                            "data.telemetry.quaternion.q0", "data.telemetry.quaternion.q1",
                            "data.telemetry.quaternion.q2",
                            "data.telemetry.quaternion.q3"]
