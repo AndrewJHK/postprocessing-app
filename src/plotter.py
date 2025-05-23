@@ -1,28 +1,32 @@
 import matplotlib.pyplot as plot
+from matplotlib.animation import FuncAnimation
 import os
 import matplotlib.ticker as ticker
+import numpy as np
+from scipy.spatial.transform import Rotation
 
 
 class Plotter:
-    def __init__(self, config_dict, dataframe_map, plots_folder_path):
+    def __init__(self, config_dict=None, dataframe_map=None, plots_folder_path="plots"):
         self.config = config_dict
-        self.dataframes = dataframe_map  # mapping: {"db1": DataFrameWrapper, ...}
-        self.plot_name = config_dict["plot_settings"].get("title", "Plot")
-        self.plot_type = config_dict["plot_settings"].get("type", "line")
-        self.precise_grid = config_dict["plot_settings"].get("precise_grid", False)
-        self.convert_epoch = config_dict["plot_settings"].get("convert_epoch", None)
+        if config_dict and dataframe_map is not None:
+            self.dataframes = dataframe_map  # mapping: {"db1": DataFrameWrapper, ...}
+            self.plot_name = config_dict["plot_settings"].get("title", "Plot")
+            self.plot_type = config_dict["plot_settings"].get("type", "line")
+            self.precise_grid = config_dict["plot_settings"].get("precise_grid", False)
+            self.convert_epoch = config_dict["plot_settings"].get("convert_epoch", None)
+            self.offset = config_dict["plot_settings"].get("offset", 0)
+            self.secondary_db_offset = config_dict["plot_settings"].get("secondary_db_offset", 0)
+            self.axis_labels = {
+                "x": config_dict["plot_settings"].get("x_axis_label", "X-Axis"),
+                "y1": config_dict["plot_settings"].get("y_axis_labels", {}).get("y1", "Y1-Axis"),
+                "y2": config_dict["plot_settings"].get("y_axis_labels", {}).get("y2", "Y2-Axis")
+            }
+
+            self.horizontal_lines = config_dict["plot_settings"].get("horizontal_lines", {})
+            self.vertical_lines = config_dict["plot_settings"].get("vertical_lines", {})
         self.plots_folder_path = plots_folder_path
-        self.offset = config_dict["plot_settings"].get("offset", 0)
-        self.secondary_db_offset = config_dict["plot_settings"].get("secondary_db_offset", 0)
-        self.axis_labels = {
-            "x": config_dict["plot_settings"].get("x_axis_label", "X-Axis"),
-            "y1": config_dict["plot_settings"].get("y_axis_labels", {}).get("y1", "Y1-Axis"),
-            "y2": config_dict["plot_settings"].get("y_axis_labels", {}).get("y2", "Y2-Axis")
-        }
-
-        self.horizontal_lines = config_dict["plot_settings"].get("horizontal_lines", {})
-        self.vertical_lines = config_dict["plot_settings"].get("vertical_lines", {})
-
+        self.anim = None
         os.makedirs(self.plots_folder_path, exist_ok=True)
 
     def plot(self):
@@ -135,6 +139,134 @@ class Plotter:
         plot.title(self.plot_name)
         self.save_plot(self.plot_name)
         plot.show()
+
+    def flight_plot_orientation(self, save, orientation):
+
+        t = np.arange(0, len(orientation)) * 0.01
+
+        fig_gyro, ax_gyro = plot.subplots()
+        ax_gyro.plot(t, orientation[:, 0], label="x")
+        ax_gyro.plot(t, orientation[:, 1], label="y")
+        ax_gyro.plot(t, orientation[:, 2], label="z")
+        ax_gyro.set_title("Rocket Rotation")
+        ax_gyro.set_xlabel("Time [s]")
+        ax_gyro.set_ylabel("Angular velocity [rad/s]")
+        ax_gyro.grid()
+        ax_gyro.legend()
+
+        fig_orient = plot.figure()
+        ax_orient = fig_orient.add_subplot(projection="3d")
+
+        self.anim = FuncAnimation(
+            fig_orient,
+            func=self.animate_orientation,
+            fargs=(ax_orient, orientation),
+            frames=len(orientation),
+            interval=10,
+            repeat_delay=1000,
+        )
+
+        if save:
+            fig_gyro.savefig("plots/gyro.png")
+            self.anim.save("plots/orientation.mp4", writer="ffmpeg")
+
+        plot.show()
+
+    @staticmethod
+    def flight_plot_velocity(save, data):
+        t = np.arange(0, len(data[:, 0])) * 0.01
+
+        fig_alt, ax_alt = plot.subplots()
+        ax_alt.plot(t, data[:, 8])
+        ax_alt.set_xlabel("Time [s]")
+        ax_alt.set_ylabel("Altitude [m]")
+        ax_alt.set_title("Altitude")
+        ax_alt.grid()
+
+        fig_vel, ax_vel = plot.subplots()
+        ax_vel.plot(t, data[:, 5])
+        ax_vel.set_xlabel("Time [s]")
+        ax_vel.set_ylabel("Velocity [m/s]")
+        ax_vel.set_title("Velocity")
+        ax_vel.grid()
+
+        fig2 = plot.figure()
+        ax2 = fig2.add_subplot(projection="3d")
+        ax2.plot(data[:, 6], data[:, 7], data[:, 8])
+        ax2.plot(data[:, 6], data[:, 7], np.zeros_like(data[:, 8]), linestyle="--")
+        ax2.plot(np.zeros_like(data[:, 6]), data[:, 7], data[:, 8], linestyle="--")
+        ax2.plot(data[:, 6], np.zeros_like(data[:, 7]), data[:, 8], linestyle="--")
+        ax2.set_xlabel("X")
+        ax2.set_ylabel("Y")
+        ax2.set_zlabel("Z")
+        ax2.set_title("Position")
+        ax2.grid()
+
+        fig_acc, ax_acc = plot.subplots()
+        ax_acc.plot(t, data[:, 0], label="x acceleration")
+        ax_acc.plot(t, data[:, 1], label="y acceleration")
+        ax_acc.set_xlabel("Time [s]")
+        ax_acc.set_ylabel("Acceleration [m/s^2]")
+        ax_acc.grid()
+        ax_acc.legend()
+
+        if save:
+            fig_alt.savefig("plots/altitude.png")
+            fig_vel.savefig("plots/velocity.png")
+            fig2.savefig("plots/position.png")
+            fig_acc.savefig("plots/altitude.png")
+
+        plot.show()
+
+    @staticmethod
+    def animate_orientation(i, ax, quaternions):
+        ax.clear()
+        ax.quiver(0, 0, 0, 1, 0, 0, color="r", alpha=0.5, linestyle="--", normalize=True)
+        ax.quiver(0, 0, 0, 0, 1, 0, color="g", alpha=0.5, linestyle="--", normalize=True)
+        ax.quiver(0, 0, 0, 0, 0, 1, color="b", alpha=0.5, linestyle="--", normalize=True)
+        ax.set_xlim([-1, 1])
+        ax.set_ylim([-1, 1])
+        ax.set_zlim([-1, 1])
+        ax.set_xlabel("X")
+        ax.set_ylabel("Y")
+        ax.set_zlabel("Z")
+        ax.set_title("Orientation")
+
+        rot = Rotation.from_quat(quaternions[i, :])
+        x_after_rot = rot.apply(np.array([1, 0, 0]))
+        y_after_rot = rot.apply(np.array([0, 1, 0]))
+        z_after_rot = rot.apply(np.array([0, 0, 1]))
+
+        ax.quiver(
+            0,
+            0,
+            0,
+            x_after_rot[0],
+            x_after_rot[1],
+            x_after_rot[2],
+            color="r",
+            normalize=True,
+        )
+        ax.quiver(
+            0,
+            0,
+            0,
+            y_after_rot[0],
+            y_after_rot[1],
+            y_after_rot[2],
+            color="g",
+            normalize=True,
+        )
+        ax.quiver(
+            0,
+            0,
+            0,
+            z_after_rot[0],
+            z_after_rot[1],
+            z_after_rot[2],
+            color="b",
+            normalize=True,
+        )
 
     def save_plot(self, filename):
         path = os.path.join(self.plots_folder_path, f"{filename}.png")

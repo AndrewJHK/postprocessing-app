@@ -103,9 +103,12 @@ class PostProcessingApp(QWidget):
             self.active_button.setChecked(False)
         button.setChecked(True)
         self.active_button = button
+        if index == 2:
+            self.processing_panel.update_columns()
 
     def add_dataframe(self, file_path, wrapper: DataFrameWrapper):
         self.dataframes[file_path] = wrapper
+        self.flight_panel.add_dataframe(file_path, wrapper)
         self.processing_panel.add_dataframe(file_path, wrapper)
         self.plotting_panel.add_dataframe(file_path, wrapper)
 
@@ -127,7 +130,9 @@ class PostProcessingApp(QWidget):
         if file_path in self.dataframes:
             del self.dataframes[file_path]
 
+        self.upload_panel.remove_dataframe(file_path)
+        self.flight_panel.remove_dataframe(file_path)
         self.processing_panel.remove_dataframe(file_path)
         self.plotting_panel.remove_dataframe(file_path)
-        self.upload_panel.remove_dataframe(file_path)
+
 

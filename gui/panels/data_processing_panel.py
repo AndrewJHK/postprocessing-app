@@ -19,8 +19,9 @@ class DataProcessingPanel(QWidget):
             "normalize": "Take content of each selected column and perform a min-max value normalization of them",
             "scale": "Take content of each selected column and scale them by a factor provided in parameters box",
             "flip_sign": "Take content of each selected columns and change the sign + into -,- into + ",
+            "absolute": "Replace all data with absolute values",
             "sort": "Select only one column and sort the whole data by that specific column.In parameters specify if it should be ascending or descending by writing 'ascending=True/False'",
-            "drop": "Drop the data base on a selected condition",
+            "drop": "Drop the data, based on a selected condition",
             "remove_negatives": "Replace all negative values with 0",
             "remove_positives": "Replace all positive values with 0",
             "rolling_mean": "Perform a rolling mean filter with a specified windows size in parameters",
@@ -55,7 +56,7 @@ class DataProcessingPanel(QWidget):
         # Operations
         self.operation_box = QGroupBox("Operations")
         self.operation_selector = QComboBox()
-        self.operation_selector.addItems(["normalize", "scale", "flip_sign", "sort", "drop"])
+        self.operation_selector.addItems(["normalize", "scale", "flip_sign", "absolute", "sort", "drop"])
         self.operation_selector.currentTextChanged.connect(self.toggle_drop_mode)
         self.operation_selector.currentTextChanged.connect(self.update_placeholder_operations)
         self.operation_selector.currentTextChanged.connect(self.update_operation_help)
@@ -146,11 +147,12 @@ class DataProcessingPanel(QWidget):
             "normalize": "factor=x",
             "scale": "100",
             "flip_sign": "",
+            "absolute": "",
             "sort": "ascending=True/False",
             "drop": "e.g. 100,200 or row['column'] > 0"
         }
         match operation:
-            case "normalize" | "flip_sign":
+            case "normalize" | "flip_sign" | "absolute":
                 self.operation_param.setText(placeholders.get(operation, ""))
                 self.operation_param.setEnabled(False)
             case _:
@@ -215,8 +217,14 @@ class DataProcessingPanel(QWidget):
                 for i in range(self.column_layout.count())
                 if self.column_layout.itemAt(i).widget().isChecked()]
 
-    def log(self, message):
-        logger.info(message)
+    def log(self, message, log_type):
+        match log_type:
+            case "DEBUG":
+                logger.debug(message)
+            case "INFO":
+                logger.info(message)
+            case "ERROR":
+                logger.error(message)
         self.status_log.append(message)
 
     def apply_operation(self):
@@ -227,7 +235,7 @@ class DataProcessingPanel(QWidget):
             param = self.operation_param.text()
 
             if not file_path or not operation:
-                self.log("Choose file and operation.")
+                self.log("Choose file and operation.", "INFO")
                 return
 
             processor = self.processors.get(file_path)
@@ -239,6 +247,8 @@ class DataProcessingPanel(QWidget):
                         processor.scale_columns(columns, float(param))
                     case "flip_sign":
                         processor.flip_column_sign(columns)
+                    case "absolute":
+                        processor.absolute(columns)
                     case "sort":
                         processor.sort_data(columns[0], ascending=True)
                     case "drop":
@@ -254,10 +264,10 @@ class DataProcessingPanel(QWidget):
                             try:
                                 processor.drop_data(row_condition=lambda row: eval(param))
                             except Exception as e:
-                                self.log(f"Invalid lambda: {e}")
-                self.log(f"Applied operation: {operation} on columns: {columns}")
+                                self.log(f"Invalid lambda: {e}", "ERROR")
+                self.log(f"Applied operation: {operation} on columns: {columns}", "INFO")
             except Exception as e:
-                self.log(f"Error during operation: {e}")
+                self.log(f"Error during operation: {e}", "ERROR")
 
         show_processing_dialog(self, self.threadpool, Worker(task))
 
@@ -282,18 +292,21 @@ class DataProcessingPanel(QWidget):
                     params[k] = value
             processor.add_filter(columns, filter_type, **params)
             self.queue_list.addItem(f"{filter_type} on {columns} with {params}")
-            self.log(f"Added filter {filter_type} for {columns}")
+            self.log(f"Added filter {filter_type} for {columns}", "INFO")
         except Exception as e:
-            self.log(f"Error adding filter: {e}")
+            self.log(f"Error adding filter: {e}", "ERROR")
 
     def apply_filters(self):
-        def task():
-            file_path = self.file_selector.currentText()
-            processor = self.processors.get(file_path)
-            processor.queue_filters()
-            self.log("Applied all queued filters")
+        try:
+            def task():
+                file_path = self.file_selector.currentText()
+                processor = self.processors.get(file_path)
+                processor.queue_filters()
+                self.log("Applied all queued filters", "INFO")
 
-        show_processing_dialog(self, self.threadpool, Worker(task))
+            show_processing_dialog(self, self.threadpool, Worker(task))
+        except Exception as e:
+            self.log(f"Error during filter aplication:{e}", "ERROR")
 
     def save_to_file(self):
         file_path = self.file_selector.currentText()
@@ -301,8 +314,10 @@ class DataProcessingPanel(QWidget):
         if processor:
             save_path, _ = QFileDialog.getSaveFileName(self, "Save as", filter="CSV Files (*.csv)")
             if save_path:
-                def task():
-                    processor.save_data(save_path)
-                    self.log(f"Data saved to: {save_path}")
-
-                show_processing_dialog(self, self.threadpool, Worker(task))
+                try:
+                    def task():
+                        processor.save_data(save_path)
+                        self.log(f"Data saved to: {save_path}", "INFO")
+                        show_processing_dialog(self, self.threadpool, Worker(task))
+                except Exception as e:
+                    self.log(f"Error during saving data: {e}", "ERROR")

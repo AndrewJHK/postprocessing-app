@@ -181,7 +181,7 @@ class PlottingPanel(QWidget):
         col2 = self.sync_col2.currentText()
 
         if db1_path not in self.dataframes or db2_path not in self.dataframes:
-            self.log("Both DBs must be selected for syncing.")
+            self.log("Both DBs must be selected for syncing.", "INFO")
             return
 
         try:
@@ -193,7 +193,7 @@ class PlottingPanel(QWidget):
             idx1, val1 = dp1.find_index_where_max("header.timestamp_epoch", col1)
             _, val2 = dp2.find_index_where_max("header.timestamp_epoch", col2)
             self.secondary_db_offset = val1 - val2
-            self.log(f"Syncing DB2 by offset {self.secondary_db_offset} based on max of {col1} and {col2}")
+            self.log(f"Syncing DB2 by offset {self.secondary_db_offset} based on max of {col1} and {col2}","INFO")
 
             df2["header.timestamp_epoch"] = df2["header.timestamp_epoch"].compute() + self.secondary_db_offset
             dp2.df_wrapper.update_dataframe(df2)
@@ -203,7 +203,7 @@ class PlottingPanel(QWidget):
             self.start_offset.setText(f"Start offset = {start_offset}")
 
         except Exception as e:
-            self.log(f"Error during DB sync: {e}")
+            self.log(f"Error during DB sync: {e}","ERROR")
 
     def add_dataframe(self, file_path, wrapper):
         self.dataframes[file_path] = wrapper
@@ -254,7 +254,7 @@ class PlottingPanel(QWidget):
             try:
                 columns = df.columns
             except Exception as e:
-                self.log(f"Failed to fetch columns from {db_path}: {e}")
+                self.log(f"Failed to fetch columns from {db_path}: {e}","ERROR")
 
         channel_input = QComboBox()
         channel_input.addItems(columns)
@@ -292,8 +292,8 @@ class PlottingPanel(QWidget):
         form.addRow("Color:", color_input)
         form.addRow("Transparency:", transparency_input)
         form.addRow("Y Axis:", y_axis_input)
-        form.addRow("X Column:", x_column_input)
-        form.addRow("Dot size:", size_input)
+        form.addRow("X Axis:", x_column_input)
+        form.addRow("Dot Size:", size_input)
         form.addRow(remove_button)
 
         container.setLayout(form)
@@ -351,13 +351,13 @@ class PlottingPanel(QWidget):
                             "alpha": float(fields[1].text()) if fields[1].text() else 1.0,
                             "y_axis": y_axis_combo.currentText(),
                             "x_column": x_axis_combo.currentText(),
-                            "size": int(fields[3].text()) if fields[3].text() else 1
+                            "size": int(fields[2].text()) if fields[2].text() else 1
                         }
             if db_config["channels"]:
                 config["databases"][db_key] = db_config
 
         if not config["databases"]:
-            self.log("No channels configured.")
+            self.log("No channels configured.","INFO")
             return
 
         selected_dataframes = {}
@@ -369,9 +369,9 @@ class PlottingPanel(QWidget):
         plotter = Plotter(config_dict=config, dataframe_map=selected_dataframes, plots_folder_path="plots")
         try:
             plotter.plot()
-            self.log("Plot generated successfully.")
+            self.log("Plot generated successfully.","INFO")
         except Exception as e:
-            self.log(f"Error during plot generation: {e}")
+            self.log(f"Error during plot generation: {e}","ERROR")
 
     @staticmethod
     def remove_input(widget):
@@ -397,5 +397,11 @@ class PlottingPanel(QWidget):
         return lines
 
     @staticmethod
-    def log(message):
-        logger.info(message)
+    def log(message, log_type):
+        match log_type:
+            case "DEBUG":
+                logger.debug(message)
+            case "INFO":
+                logger.info(message)
+            case "ERROR":
+                logger.error(message)
