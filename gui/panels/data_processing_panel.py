@@ -16,12 +16,13 @@ class DataProcessingPanel(QWidget):
         self.processors = {}
         self.threadpool = QThreadPool()
         self.help_map = {
-            "normalize": "Take content of each selected column and perform a min-max value normalization of them",
-            "scale": "Take content of each selected column and scale them by a factor provided in parameters box",
-            "flip_sign": "Take content of each selected columns and change the sign + into -,- into + ",
             "absolute": "Replace all data with absolute values",
-            "sort": "Select only one column and sort the whole data by that specific column.In parameters specify if it should be ascending or descending by writing 'ascending=True/False'",
             "drop": "Drop the data, based on a selected condition",
+            "flip_sign": "Take content of each selected columns and change the sign + into -,- into + ",
+            "normalize": "Take content of each selected column and perform a min-max value normalization of them",
+            "rename": "Rename a selected column",
+            "scale": "Take content of each selected column and scale them by a factor provided in parameters box",
+            "sort": "Select only one column and sort the whole data by that specific column.In parameters specify if it should be ascending or descending by writing 'ascending=True/False'",
             "remove_negatives": "Replace all negative values with 0",
             "remove_positives": "Replace all positive values with 0",
             "rolling_mean": "Perform a rolling mean filter with a specified windows size in parameters",
@@ -56,14 +57,14 @@ class DataProcessingPanel(QWidget):
         # Operations
         self.operation_box = QGroupBox("Operations")
         self.operation_selector = QComboBox()
-        self.operation_selector.addItems(["normalize", "scale", "flip_sign", "absolute", "sort", "drop"])
+        self.operation_selector.addItems(["absolute", "drop", "flip_sign", "normalize", "rename", "scale", "sort"])
         self.operation_selector.currentTextChanged.connect(self.toggle_drop_mode)
         self.operation_selector.currentTextChanged.connect(self.update_placeholder_operations)
         self.operation_selector.currentTextChanged.connect(self.update_operation_help)
         self.operation_param = QLineEdit()
         self.operation_param.setEnabled(False)
         self.operation_help = QLabel(
-            "Take content of each selected column and perform a min-max value normalization of them")
+            "Replace all data with absolute values")
         self.operation_help.setWordWrap(True)
         self.apply_op_button = QPushButton("Apply operation")
         self.apply_op_button.clicked.connect(self.apply_operation)
@@ -149,7 +150,8 @@ class DataProcessingPanel(QWidget):
             "flip_sign": "",
             "absolute": "",
             "sort": "ascending=True/False",
-            "drop": "e.g. 100,200 or row['column'] > 0"
+            "drop": "e.g. 100,200 or row['column'] > 0",
+            "rename": "new_name"
         }
         match operation:
             case "normalize" | "flip_sign" | "absolute":
@@ -233,6 +235,7 @@ class DataProcessingPanel(QWidget):
             columns = self.get_selected_columns()
             operation = self.operation_selector.currentText()
             param = self.operation_param.text()
+            success = False
 
             if not file_path or not operation:
                 self.log("Choose file and operation.", "INFO")
@@ -243,29 +246,45 @@ class DataProcessingPanel(QWidget):
                 match operation:
                     case "normalize":
                         processor.normalize_columns(columns)
+                        success = True
                     case "scale":
                         processor.scale_columns(columns, float(param))
+                        success = True
                     case "flip_sign":
                         processor.flip_column_sign(columns)
+                        success = True
+                    case "rename":
+                        if len(columns) <= 1:
+                            processor.rename_column(columns, str(param))
+                            QTimer.singleShot(200, self.update_columns)
+                            success = True
+                        else:
+                            self.log("You may rename only one column at a time", "ERROR")
                     case "absolute":
                         processor.absolute(columns)
+                        success = True
                     case "sort":
                         processor.sort_data(columns[0], ascending=True)
+                        success = True
                     case "drop":
                         if self.drop_columns_radio.isChecked():
                             processor.drop_data(columns=columns)
                             QTimer.singleShot(200, self.update_columns)
+                            success = True
                         elif self.drop_index_radio.isChecked():
                             start_end = param.split(',')
                             if len(start_end) == 2:
                                 start, end = int(start_end[0]), int(start_end[1])
                                 processor.drop_data(row_range=(start, end))
+                                success = True
                         elif self.drop_condition_radio.isChecked():
                             try:
                                 processor.drop_data(row_condition=lambda row: eval(param))
+                                success = True
                             except Exception as e:
                                 self.log(f"Invalid lambda: {e}", "ERROR")
-                self.log(f"Applied operation: {operation} on columns: {columns}", "INFO")
+                if success:
+                    self.log(f"Applied operation: {operation} on columns: {columns}", "INFO")
             except Exception as e:
                 self.log(f"Error during operation: {e}", "ERROR")
 
