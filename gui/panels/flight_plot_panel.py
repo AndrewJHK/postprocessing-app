@@ -44,9 +44,10 @@ class FlightPlotPanel(QWidget):
 
         plot_buttons_layout = QHBoxLayout()
         self.plot_orientation_button = QPushButton("Plot orientation animation (disabled)")
-        self.plot_orientation_button.clicked.connect(self.plot_orientation)
+        #self.plot_orientation_button.clicked.connect(self.plot_orientation)
+        self.plot_orientation_button.setDisabled(True)
         self.plot_velocity_button = QPushButton("Plot velocity/acceleration")
-        #self.plot_velocity_button.clicked.connect(self.plot_velocity)
+        self.plot_velocity_button.clicked.connect(self.plot_velocity)
         plot_buttons_layout.addWidget(self.plot_orientation_button)
         plot_buttons_layout.addWidget(self.plot_velocity_button)
         layout.addLayout(plot_buttons_layout)

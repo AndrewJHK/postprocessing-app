@@ -158,6 +158,10 @@ class DataProcessor:
         for column in columns:
             self.df[column] = abs(self.df[column])
 
+    @sync_with_wrapper
+    def rename_column(self, columns, new_name):
+        self.df = self.df.rename(columns={columns[0]: new_name})
+
     def interpolate_index(self):
         df_pd = self.df_wrapper.get_raw_pandas()
         df_pd = df_pd.copy()
@@ -203,7 +207,8 @@ class DataProcessor:
         df_pd = self.df.compute()
         df_pd = df_pd.copy()
         acc = df_pd[["data.telemetry.acc_data.x", "data.telemetry.acc_data.y", "data.telemetry.acc_data.z"]].to_numpy()
-        orient = df_pd[["data.telemetry.quaternion.q0_computed", "data.telemetry.quaternion.q1_computed", "data.telemetry.quaternion.q2_computed",
+        orient = df_pd[["data.telemetry.quaternion.q0_computed", "data.telemetry.quaternion.q1_computed",
+                        "data.telemetry.quaternion.q2_computed",
                         "data.telemetry.quaternion.q3_computed"]].to_numpy()
 
         acc[:, 0] -= np.mean(acc[:20, 0])
